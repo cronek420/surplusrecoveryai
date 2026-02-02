@@ -1,21 +1,23 @@
-
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { AgentRole, Lead, PlaybookEntry } from "./types";
 
 // Helper to get fresh AI instance following the required SDK initialization pattern
 const getAI = () => {
+  // Use strictly process.env.API_KEY as per requirements.
+  // In a Vite environment, this is replaced by the value from your .env file.
   const apiKey = (process.env.API_KEY || "").trim();
   
   if (!apiKey || apiKey === "your_gemini_api_key_here") {
-    const errorMsg = "API_KEY is undefined. Ensure you have a file named '.env' (not 'env.env' or '.env.txt') and restart your npm dev server.";
-    console.error("Diagnostic Check:", {
-      providedKeyLength: apiKey.length,
-      isEnvVarSet: !!process.env.API_KEY,
-    });
+    const errorMsg = "Protocol Breach: API_KEY is undefined. Ensure you have a file named '.env' (NOT 'env.env' or '.env.txt') in the PROJECT ROOT and restart your npm dev server.";
+    console.group("🛰️ SR-AI SYSTEM DIAGNOSTICS");
+    console.error("STATUS: KEY_NOT_LOADED");
+    console.log("Expected Path: [Project Root]/.env");
+    console.log("Current Key Value Length:", apiKey.length);
+    console.groupEnd();
     throw new Error(errorMsg);
   }
   
-  return new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+  return new GoogleGenAI({ apiKey });
 };
 
 /**

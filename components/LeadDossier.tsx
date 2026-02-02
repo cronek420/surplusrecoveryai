@@ -12,19 +12,21 @@ interface LeadDossierProps {
   runOutreach: (lead: Lead) => void;
   runLegal: (lead: Lead) => void;
   runFiling: (lead: Lead) => void;
+  runRecon: (lead: Lead) => void;
   masterResult: string | null;
   thinkingResult: string | null;
   outreachResult: string | null;
   closingResult: string | null;
   filerResult: string | null;
+  reconResult: string | null;
   isDeepThinking: boolean;
   updateLead: (id: string, updates: Partial<Lead>) => void;
 }
 
 const LeadDossier: React.FC<LeadDossierProps> = ({
   lead, onClose, onAdvance,
-  runMaster, runTrace, runOutreach, runLegal, runFiling,
-  masterResult, thinkingResult, outreachResult, closingResult, filerResult,
+  runMaster, runTrace, runOutreach, runLegal, runFiling, runRecon,
+  masterResult, thinkingResult, outreachResult, closingResult, filerResult, reconResult,
   isDeepThinking, updateLead
 }) => {
   const [activeAction, setActiveAction] = useState<string | null>(null);
@@ -128,43 +130,21 @@ const LeadDossier: React.FC<LeadDossierProps> = ({
                         <div className="text-[9px] text-zinc-600 mono uppercase">{doc.status} • Case: {doc.data?.caseNumber || 'N/A'}</div>
                       </div>
                    </div>
-                   {doc.data && (
-                      <div className="text-right">
-                         <div className="text-[10px] font-black text-emerald-500 mono">${doc.data.amount?.toLocaleString()}</div>
-                         <div className="text-[8px] font-bold text-zinc-700 uppercase tracking-widest">Verified Val</div>
-                      </div>
-                   )}
                 </div>
               ))
             )}
           </div>
         </section>
 
-        {/* AI Swarm Operations with improved visuals */}
+        {/* AI Swarm Operations */}
         <div className="space-y-10">
-          <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Strategic blueprint</h4>
-              <button onClick={() => wrapAction('master', runMaster)} className="text-[10px] font-bold text-indigo-400 hover:text-white uppercase tracking-widest">Generate</button>
-            </div>
-            {masterResult && (
-               <div className="bg-indigo-500/5 rounded-3xl p-8 border border-indigo-500/20 shadow-xl">
-                  <p className="text-[11px] mono italic leading-loose text-zinc-300 whitespace-pre-wrap">{masterResult}</p>
-               </div>
-            )}
-          </section>
-
-          <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Skip Trace intel</h4>
-              <button onClick={() => wrapAction('trace', runTrace)} className="text-[10px] font-bold text-zinc-500 hover:text-white uppercase tracking-widest">Trace</button>
-            </div>
-            {thinkingResult && (
-               <div className="bg-zinc-900 rounded-3xl p-8 border border-zinc shadow-xl">
-                  <p className="text-[11px] mono italic leading-loose text-zinc-400 whitespace-pre-wrap">{thinkingResult}</p>
-               </div>
-            )}
-          </section>
+          <AgentSection title="Strategic Blueprint" agentId="STRATEGIST" result={masterResult} onRun={() => wrapAction('master', runMaster)} active={activeAction === 'master'} />
+          <AgentSection title="Property Recon" agentId="SURVEYOR" result={reconResult} onRun={() => wrapAction('recon', runRecon)} active={activeAction === 'recon'} />
+          {/* Fix: changed runDeepTrace to the correct prop name runTrace */}
+          <AgentSection title="Deep Skip-Trace" agentId="TRACER" result={thinkingResult} onRun={() => wrapAction('trace', runTrace)} active={activeAction === 'trace'} />
+          <AgentSection title="Outreach Sequences" agentId="OUTREACH" result={outreachResult} onRun={() => wrapAction('outreach', runOutreach)} active={activeAction === 'outreach'} />
+          <AgentSection title="Legal Strategy" agentId="LEGAL" result={closingResult} onRun={() => wrapAction('legal', runLegal)} active={activeAction === 'legal'} />
+          <AgentSection title="Filing Checklist" agentId="FILER" result={filerResult} onRun={() => wrapAction('filing', runFiling)} active={activeAction === 'filing'} />
         </div>
 
         <section className="space-y-6 pb-20">
@@ -196,5 +176,23 @@ const LeadDossier: React.FC<LeadDossierProps> = ({
     </div>
   );
 };
+
+const AgentSection = ({ title, agentId, result, onRun, active }: { title: string, agentId: string, result: string | null, onRun: () => void, active: boolean }) => (
+  <section className="space-y-4">
+    <div className="flex items-center justify-between">
+      <h4 className={`text-[10px] font-bold uppercase tracking-widest ${active ? 'text-indigo-400' : 'text-zinc-500'}`}>{title}</h4>
+      <button onClick={onRun} disabled={active} className="text-[10px] font-bold text-indigo-400 hover:text-white uppercase tracking-widest disabled:opacity-30">
+        {active ? 'Analyzing...' : result ? 'Re-Run' : 'Deploy'}
+      </button>
+    </div>
+    {result && (
+       <div className={`rounded-3xl p-8 border shadow-xl animate-in fade-in slide-in-from-top-2 duration-500 ${
+         agentId === 'STRATEGIST' ? 'bg-indigo-500/5 border-indigo-500/20' : 'bg-zinc-900 border-zinc'
+       }`}>
+          <p className="text-[11px] mono italic leading-loose text-zinc-300 whitespace-pre-wrap">{result}</p>
+       </div>
+    )}
+  </section>
+);
 
 export default LeadDossier;

@@ -9,7 +9,17 @@ import IntelligenceHub from './components/IntelligenceHub';
 import LeadDossier from './components/LeadDossier';
 import LiveAudioController from './components/LiveAudioController';
 import TacticalMap from './components/TacticalMap';
-import { scoutSurplusFunds, analyzeLead, optimizeSkipTracingStrategy, generateOutreachPlan, generateClosingStrategy, generateMasterStrategy, generateFilingChecklist, calculatePriorityScore } from './geminiService';
+import { 
+  scoutSurplusFunds, 
+  analyzeLead, 
+  optimizeSkipTracingStrategy, 
+  generateOutreachPlan, 
+  generateClosingStrategy, 
+  generateMasterStrategy, 
+  generateFilingChecklist, 
+  calculatePriorityScore,
+  getPropertyInsights
+} from './geminiService';
 
 const INITIAL_AGENTS: Agent[] = [
   { id: 'SCOUTER', name: 'Scout-Net', description: 'Public Record Sweep.', status: 'IDLE', color: '#6366f1' },
@@ -58,6 +68,7 @@ const App: React.FC = () => {
   const [closingResult, setClosingResult] = useState<string | null>(null);
   const [masterResult, setMasterResult] = useState<string | null>(null);
   const [filerResult, setFilerResult] = useState<string | null>(null);
+  const [reconResult, setReconResult] = useState<string | null>(null);
 
   useEffect(() => { localStorage.setItem('sr_leads', JSON.stringify(leads)); }, [leads]);
   useEffect(() => { localStorage.setItem('sr_auth', isAuthenticated.toString()); }, [isAuthenticated]);
@@ -84,6 +95,7 @@ const App: React.FC = () => {
     setClosingResult(null);
     setMasterResult(null);
     setFilerResult(null);
+    setReconResult(null);
   };
 
   const handleSelectLead = (lead: Lead) => {
@@ -154,7 +166,6 @@ const App: React.FC = () => {
         emailHistory: [],
         documents: [],
         priorityScore: 0,
-        // Mock some coordinates for the tactical map
         latLng: { 
           lat: 25.7617 + (Math.random() - 0.5) * 0.1, 
           lng: -80.1918 + (Math.random() - 0.5) * 0.1 
@@ -184,81 +195,101 @@ const App: React.FC = () => {
     if (newState) runDiscovery(false);
   };
 
-  /**
-   * Orchestrate master blueprint generation for a target lead.
-   */
   const runMasterStrategy = async (lead: Lead) => {
     setIsDeepThinking(true);
+    setAgents(prev => prev.map(a => a.id === 'STRATEGIST' ? { ...a, status: 'WORKING' } : a));
     try {
       const res = await generateMasterStrategy(lead);
       setMasterResult(res);
+      addLog('STRATEGIST', `Generated master blueprint for ${lead.ownerName}`, 'SUCCESS', lead.id);
+      setAgents(prev => prev.map(a => a.id === 'STRATEGIST' ? { ...a, status: 'SUCCESS' } : a));
     } catch (err) {
-      console.error("Master Strategy Orchestration Error:", err);
-    } finally {
-      setIsDeepThinking(false);
-    }
+      setAgents(prev => prev.map(a => a.id === 'STRATEGIST' ? { ...a, status: 'ERROR' } : a));
+    } finally { setIsDeepThinking(false); }
   };
 
-  /**
-   * Execute deep skip tracing intel retrieval.
-   */
   const runDeepTrace = async (lead: Lead) => {
     setIsDeepThinking(true);
+    setAgents(prev => prev.map(a => a.id === 'TRACER' ? { ...a, status: 'WORKING' } : a));
     try {
-      // Using an empty array for PlaybookEntry as history isn't currently tracked in the simple state
       const res = await optimizeSkipTracingStrategy([], lead);
       setThinkingResult(res);
+      addLog('TRACER', `Deep skip-trace complete for ${lead.ownerName}`, 'SUCCESS', lead.id);
+      setAgents(prev => prev.map(a => a.id === 'TRACER' ? { ...a, status: 'SUCCESS' } : a));
     } catch (err) {
-      console.error("Deep Trace Execution Error:", err);
-    } finally {
-      setIsDeepThinking(false);
-    }
+      setAgents(prev => prev.map(a => a.id === 'TRACER' ? { ...a, status: 'ERROR' } : a));
+    } finally { setIsDeepThinking(false); }
   };
 
-  /**
-   * Generate highly personalized outreach sequences.
-   */
   const runOutreachGeneration = async (lead: Lead) => {
     setIsDeepThinking(true);
+    setAgents(prev => prev.map(a => a.id === 'OUTREACH' ? { ...a, status: 'WORKING' } : a));
     try {
       const res = await generateOutreachPlan(lead);
       setOutreachResult(res);
+      addLog('OUTREACH', `Optimized outreach sequences generated for ${lead.ownerName}`, 'SUCCESS', lead.id);
+      setAgents(prev => prev.map(a => a.id === 'OUTREACH' ? { ...a, status: 'SUCCESS' } : a));
     } catch (err) {
-      console.error("Outreach Generation Error:", err);
-    } finally {
-      setIsDeepThinking(false);
-    }
+      setAgents(prev => prev.map(a => a.id === 'OUTREACH' ? { ...a, status: 'ERROR' } : a));
+    } finally { setIsDeepThinking(false); }
   };
 
-  /**
-   * Synthesize legal closing strategies and potential objections.
-   */
   const runClosingStrategy = async (lead: Lead) => {
     setIsDeepThinking(true);
+    setAgents(prev => prev.map(a => a.id === 'LEGAL' ? { ...a, status: 'WORKING' } : a));
     try {
       const res = await generateClosingStrategy(lead);
       setClosingResult(res);
+      addLog('LEGAL', `Legal closing strategy finalized for ${lead.ownerName}`, 'SUCCESS', lead.id);
+      setAgents(prev => prev.map(a => a.id === 'LEGAL' ? { ...a, status: 'SUCCESS' } : a));
     } catch (err) {
-      console.error("Closing Strategy Error:", err);
-    } finally {
-      setIsDeepThinking(false);
-    }
+      setAgents(prev => prev.map(a => a.id === 'LEGAL' ? { ...a, status: 'ERROR' } : a));
+    } finally { setIsDeepThinking(false); }
   };
 
-  /**
-   * Compile mandatory filing requirements for payout processing.
-   */
   const runFilingChecklist = async (lead: Lead) => {
     setIsDeepThinking(true);
+    setAgents(prev => prev.map(a => a.id === 'FILER' ? { ...a, status: 'WORKING' } : a));
     try {
       const res = await generateFilingChecklist(lead);
       setFilerResult(res);
+      addLog('FILER', `Filing watchdog checklist compiled for ${lead.ownerName}`, 'SUCCESS', lead.id);
+      setAgents(prev => prev.map(a => a.id === 'FILER' ? { ...a, status: 'SUCCESS' } : a));
     } catch (err) {
-      console.error("Filing Checklist Generation Error:", err);
-    } finally {
-      setIsDeepThinking(false);
-    }
+      setAgents(prev => prev.map(a => a.id === 'FILER' ? { ...a, status: 'ERROR' } : a));
+    } finally { setIsDeepThinking(false); }
   };
+
+  const runRecon = async (lead: Lead) => {
+    setIsDeepThinking(true);
+    setAgents(prev => prev.map(a => a.id === 'SURVEYOR' ? { ...a, status: 'WORKING' } : a));
+    try {
+      const res = await getPropertyInsights(lead.propertyAddress || lead.lastKnownAddress, lead.latLng?.lat, lead.latLng?.lng);
+      setReconResult(res.text);
+      addLog('SURVEYOR', `Property recon successful for ${lead.propertyAddress}`, 'SUCCESS', lead.id);
+      setAgents(prev => prev.map(a => a.id === 'SURVEYOR' ? { ...a, status: 'SUCCESS' } : a));
+    } catch (err) {
+      setAgents(prev => prev.map(a => a.id === 'SURVEYOR' ? { ...a, status: 'ERROR' } : a));
+    } finally { setIsDeepThinking(false); }
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="h-screen bg-black flex items-center justify-center p-6 relative">
+        <div className="absolute inset-0 bg-indigo-500/5 blur-[120px] rounded-full scale-50" />
+        <div className="w-full max-w-sm p-12 bg-[#0c0c0e] rounded-[32px] border border-white/5 shadow-2xl relative">
+          <div className="flex flex-col items-center mb-12 text-center">
+            <div className="w-16 h-16 bg-white rounded-[20px] mb-8 flex items-center justify-center shadow-xl shadow-white/5">
+              <div className="w-8 h-8 bg-black rounded-lg" />
+            </div>
+            <h1 className="text-2xl font-extrabold tracking-tight">Recovery Console</h1>
+            <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.4em] mt-3 leading-relaxed">Identity Auth Required</p>
+          </div>
+          <button onClick={() => setIsAuthenticated(true)} className="w-full bg-indigo-600 text-white font-bold py-5 rounded-2xl text-sm transition-all hover:bg-indigo-500 active:scale-[0.98]">Initialize Linkage</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex overflow-hidden bg-black selection:bg-indigo-500/30">
@@ -370,11 +401,13 @@ const App: React.FC = () => {
             runOutreach={runOutreachGeneration}
             runLegal={runClosingStrategy}
             runFiling={runFilingChecklist}
+            runRecon={runRecon}
             masterResult={masterResult}
             thinkingResult={thinkingResult}
             outreachResult={outreachResult}
             closingResult={closingResult}
             filerResult={filerResult}
+            reconResult={reconResult}
             isDeepThinking={isDeepThinking}
             updateLead={updateLead}
           />

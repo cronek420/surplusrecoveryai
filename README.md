@@ -1,20 +1,27 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
+# 🚀 SR-AI | Surplus Recovery Swarm - Local Setup
 
-This contains everything you need to run your app locally.
+This "Workhorse" application is built to run entirely in the browser using the Gemini API.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1UGqPMTzEfk-S_mWrJ09Q-LuSqfpRnG2T
+## 🛠️ How to Run Locally
 
-## Run Locally
+1.  **Clone the directory** to your local machine.
+2.  **Serve the files** using any local web server. Since it uses ESM modules, you need a server (not just opening `index.html`).
+    ```bash
+    # Option A: If you have Node.js
+    npx serve .
 
-**Prerequisites:**  Node.js
+    # Option B: If you have Python
+    python -m http.server 8000
+    ```
+3.  **Open in Browser**: Visit `http://localhost:3000` (or `8000`).
+4.  **API Key**: The application expects `process.env.API_KEY` to be available. In a local environment, you may need to hardcode it in `index.html` within the `importmap` area or use a proxy. However, in this specific preview environment, it is automatically injected.
 
+## 📁 Key Features
+- **Scout-Net**: Automatic web scanning for surplus lists.
+- **Tactical Map**: Geographic visualization of recovery bounities.
+- **Dossier System**: High-fidelity OCR and agentic intelligence sessions.
+- **Voice Strategist**: Real-time native audio conversation via Gemini Live.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## ⚖️ Disclaimer
+This tool is for educational purposes. Always ensure compliance with local jurisdictional laws regarding surplus recovery and solicitation.

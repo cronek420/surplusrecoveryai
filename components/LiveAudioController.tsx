@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenAI, Modality } from '@google/genai';
+import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 
 const LiveAudioController: React.FC = () => {
   const [isActive, setIsActive] = useState(false);
@@ -98,7 +98,7 @@ const LiveAudioController: React.FC = () => {
           source.connect(scriptProcessor);
           scriptProcessor.connect(inputCtx.destination);
         },
-        onmessage: async (msg: any) => {
+        onmessage: async (msg: LiveServerMessage) => {
           if (msg.serverContent?.outputTranscription) {
             setTranscription(prev => prev + msg.serverContent.outputTranscription.text);
           }
@@ -137,7 +137,7 @@ const LiveAudioController: React.FC = () => {
         },
       },
       config: {
-        responseModalities: [Modality.AUDIO],
+        responseModalalities: [Modality.AUDIO],
         outputAudioTranscription: {},
         systemInstruction: "You are a real-time voice strategist for a surplus recovery firm. Be concise, professional, and clear."
       }

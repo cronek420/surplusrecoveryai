@@ -11,6 +11,7 @@ export const getPropertyInsights = async (address: string, lat?: number, lng?: n
   const prompt = `Analyze this property address: ${address}. Provide: 1. Neighborhood demographic vibe, 2. Proximity to local courthouse, 3. Estimated property value range based on nearby sales. Ground your answer in Google Maps data.`;
   
   const response = await ai.models.generateContent({
+    // Gemini 2.5 series is required for Maps Grounding.
     model: "gemini-2.5-flash",
     contents: prompt,
     config: {
@@ -23,9 +24,17 @@ export const getPropertyInsights = async (address: string, lat?: number, lng?: n
     },
   });
 
+  const text = response.text || '';
+  const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+  // Extracting URLs from groundingChunks as required by guidelines
+  const links = chunks
+    .filter((chunk: any) => chunk.maps)
+    .map((chunk: any) => `\n- [${chunk.maps.title || 'Source'}](${chunk.maps.uri})`)
+    .join('');
+
   return {
-    text: response.text,
-    sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => chunk.maps) || []
+    text: text + (links ? '\n\nSources:\n' + links : ''),
+    sources: chunks.filter((chunk: any) => chunk.maps).map((chunk: any) => chunk.maps) || []
   };
 };
 
@@ -125,9 +134,18 @@ export const scoutSurplusFunds = async (state: string, county: string) => {
     contents: `MISSION: High-precision discovery of unclaimed surplus funds in ${county}, ${state}.`,
     config: { tools: [{ googleSearch: {} }] },
   });
+
+  const text = response.text || '';
+  const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+  // Extract website URLs from groundingChunks as required by guidelines
+  const links = chunks
+    .filter((chunk: any) => chunk.web)
+    .map((chunk: any) => `\n- [${chunk.web.title || 'Source'}](${chunk.web.uri})`)
+    .join('');
+
   return {
-    text: response.text,
-    sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => chunk.web) || []
+    text: text + (links ? '\n\nSources:\n' + links : ''),
+    sources: chunks.filter((chunk: any) => chunk.web).map((chunk: any) => chunk.web) || []
   };
 };
 

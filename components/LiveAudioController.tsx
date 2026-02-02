@@ -2,9 +2,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 
-const LiveAudioController: React.FC = () => {
+interface LiveAudioControllerProps {
+  onCommand?: (command: string) => void;
+}
+
+const COMMAND_KEYWORDS = [
+  'scout', 'discovery', 'map', 'deck', 'operations', 'audit', 'terminal', 
+  'intelligence', 'hub', 'auto start', 'auto stop', 'enable auto', 'disable auto'
+];
+
+const LiveAudioController: React.FC<LiveAudioControllerProps> = ({ onCommand }) => {
   const [isActive, setIsActive] = useState(false);
   const [transcription, setTranscription] = useState('');
+  const [lastCommand, setLastCommand] = useState<string | null>(null);
+  
   const sessionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef(0);
@@ -60,6 +71,18 @@ const LiveAudioController: React.FC = () => {
     nextStartTimeRef.current = 0;
   };
 
+  const parseForCommands = (text: string) => {
+    const lower = text.toLowerCase();
+    for (const keyword of COMMAND_KEYWORDS) {
+      if (lower.includes(keyword)) {
+        onCommand?.(keyword);
+        setLastCommand(keyword);
+        setTimeout(() => setLastCommand(null), 3000);
+        return;
+      }
+    }
+  };
+
   const startSession = async () => {
     // Guidelines: Always create a new GoogleGenAI instance right before making an API call
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
@@ -99,6 +122,11 @@ const LiveAudioController: React.FC = () => {
           scriptProcessor.connect(inputCtx.destination);
         },
         onmessage: async (msg: LiveServerMessage) => {
+          if (msg.serverContent?.inputTranscription) {
+             const text = msg.serverContent.inputTranscription.text;
+             parseForCommands(text);
+          }
+
           if (msg.serverContent?.outputTranscription) {
             setTranscription(prev => prev + msg.serverContent.outputTranscription.text);
           }
@@ -137,10 +165,13 @@ const LiveAudioController: React.FC = () => {
         },
       },
       config: {
-        // Fix: corrected property name from responseModalalities to responseModalities
         responseModalities: [Modality.AUDIO],
         outputAudioTranscription: {},
-        systemInstruction: "You are a real-time voice strategist for a surplus recovery firm. Be concise, professional, and clear."
+        inputAudioTranscription: {},
+        systemInstruction: `You are a real-time voice strategist for Lexicon Solutions, owned by Thomas Gronek (Tom). 
+        You provide professional, direct tactical advice. You are also aware of dashboard commands. 
+        If Tom asks to "scout", "open the map", "show the terminal", etc., acknowledge the instruction 
+        briefly as the dashboard will automatically respond to those keywords in the transcription.`
       }
     });
 
@@ -148,7 +179,12 @@ const LiveAudioController: React.FC = () => {
   };
 
   return (
-    <div className="glass p-4 rounded-xl flex items-center gap-4">
+    <div className="glass p-4 rounded-xl flex items-center gap-4 relative overflow-hidden">
+      {lastCommand && (
+        <div className="absolute top-0 left-0 w-full h-full bg-indigo-500/10 backdrop-blur-sm flex items-center justify-center animate-in fade-in duration-300">
+           <span className="text-[10px] font-black uppercase text-indigo-400 tracking-[0.3em]">Command Executed: {lastCommand}</span>
+        </div>
+      )}
       <button 
         onClick={isActive ? stopSession : startSession}
         className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
@@ -161,9 +197,9 @@ const LiveAudioController: React.FC = () => {
           <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
         )}
       </button>
-      <div>
-        <h4 className="font-bold text-sm">{isActive ? 'Strategist Listening...' : 'Talk to a Strategist'}</h4>
-        <p className="text-xs text-slate-400">{isActive ? (transcription || '...') : 'Tap to start real-time audio session'}</p>
+      <div className="flex-1 min-w-0">
+        <h4 className="font-bold text-sm truncate">{isActive ? 'Command Link Active' : 'Lexicon Voice Control'}</h4>
+        <p className="text-xs text-slate-400 truncate">{isActive ? (transcription || 'Listening for commands...') : 'Tap to initialize audio link'}</p>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 {
-  "name": "SurplusRecovery AI Workhorse",
-  "description": "Enterprise-grade agentic recovery system with automated Gmail outreach and legal intelligence grounding.",
+  "name": "LEXICON SOLUTIONS | Command Deck",
+  "description": "Unified agentic recovery system for Master Controller Thomas Gronek. Powered by the Lexicon Swarm Orchestration Engine.",
   "requestFramePermissions": [
     "microphone",
     "geolocation"

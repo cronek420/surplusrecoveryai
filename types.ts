@@ -1,11 +1,20 @@
 
-export type AgentRole = 'SCOUTER' | 'TRACER' | 'OUTREACH' | 'LEGAL' | 'STRATEGIST' | 'LIEN' | 'FILER' | 'ANALYST' | 'SURVEYOR';
+export type AgentRole = 'SCOUTER' | 'TRACER' | 'OUTREACH' | 'LEGAL' | 'STRATEGIST' | 'LIEN' | 'FILER' | 'ANALYST' | 'SURVEYOR' | 'CORRESPONDENT';
 
 export type LeadStatus = 'DISCOVERED' | 'TRACED' | 'CONTACTED' | 'LEGAL_REVIEW' | 'FILED' | 'PAID';
 
 export type VerificationStatus = 'YES' | 'NO' | 'PENDING';
 
 export type ViewType = 'OPERATIONS' | 'INTELLIGENCE' | 'AUDIT' | 'TACTICAL_MAP';
+
+export interface UserIdentity {
+  name: string;
+  phone: string;
+  role: string;
+  company: string;
+  ceoTitle: string;
+  senderEmail: string;
+}
 
 export interface Agent {
   id: AgentRole;

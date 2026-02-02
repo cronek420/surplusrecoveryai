@@ -1,17 +1,18 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SR-AI | Command Deck</title>
+    <title>LEXICON SOLUTIONS | Master Control</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
         
         :root {
-          --brand-primary: #6366f1;
-          --brand-emerald: #10b981;
-          --bg-base: #09090b;
+          --brand-primary: #818cf8;
+          --brand-accent: #10b981;
+          --bg-base: #050507;
         }
 
         body { 
@@ -25,28 +26,30 @@
 
         .mono { font-family: 'JetBrains Mono', monospace; }
         
-        /* Premium Background Gradient */
+        /* Tactical HUD Background */
         body::before {
           content: "";
           position: fixed;
           top: 0; left: 0; right: 0; bottom: 0;
           background: 
-            radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
-            radial-gradient(circle at 100% 100%, rgba(16, 185, 129, 0.03) 0%, transparent 50%);
+            radial-gradient(circle at 0% 0%, rgba(129, 140, 248, 0.08) 0%, transparent 40%),
+            radial-gradient(circle at 100% 100%, rgba(16, 185, 129, 0.04) 0%, transparent 40%),
+            url('https://www.transparenttextures.com/patterns/carbon-fibre.png');
+          opacity: 0.4;
           pointer-events: none;
           z-index: -1;
         }
 
-        .border-zinc { border-color: rgba(39, 39, 42, 0.6); }
+        .border-zinc { border-color: rgba(39, 39, 42, 0.4); }
         
-        .custom-scroll::-webkit-scrollbar { width: 5px; }
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
         .custom-scroll::-webkit-scrollbar-track { background: transparent; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #18181b; border-radius: 10px; }
         .custom-scroll::-webkit-scrollbar-thumb:hover { background: #27272a; }
 
         .dossier-panel {
-          transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-          box-shadow: -20px 0 60px rgba(0,0,0,0.5);
+          transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+          box-shadow: -40px 0 80px rgba(0,0,0,0.7);
         }
 
         .card-hover {
@@ -54,8 +57,8 @@
         }
         .card-hover:hover {
           transform: translateY(-2px);
-          background-color: rgba(255,255,255,0.02);
-          border-color: rgba(255,255,255,0.1);
+          background-color: rgba(255,255,255,0.03);
+          border-color: rgba(255,255,255,0.15);
         }
 
         @keyframes marquee {
@@ -64,13 +67,17 @@
         }
         .animate-marquee {
           display: inline-flex;
-          animation: marquee 40s linear infinite;
+          animation: marquee 60s linear infinite;
         }
 
         .glass {
-          background: rgba(15, 15, 20, 0.7);
-          backdrop-filter: blur(12px);
-          border: 1px solid rgba(255, 255, 255, 0.05);
+          background: rgba(10, 10, 15, 0.85);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .lexicon-glow {
+          box-shadow: 0 0 20px rgba(129, 140, 248, 0.2);
         }
     </style>
 <script type="importmap">

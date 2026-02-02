@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Agent, Lead, ActivityLog, AgentRole, LeadStatus, ViewType } from './types';
 import AgentCard from './components/AgentCard';
@@ -23,7 +24,7 @@ import {
 const INITIAL_AGENTS: Agent[] = [
   { id: 'SCOUTER', name: 'Scout-Net', description: 'Public Record Sweep.', status: 'IDLE', color: '#6366f1' },
   { id: 'TRACER', name: 'Shadow-Trace', description: 'Deep-Web Identity.', status: 'IDLE', color: '#a855f7' },
-  { id: 'OUTREACH', name: 'Echo-Sync', description: 'Automated Outreach.', status: 'IDLE', color: '#f59e0b', isAutomated: true },
+  { id: 'CORRESPONDENT', name: 'SentinelLink', description: 'Strategic Outreach & Advisor.', status: 'IDLE', color: '#f59e0b' },
   { id: 'SURVEYOR', name: 'Surv-01', description: 'Geographic Intelligence.', status: 'IDLE', color: '#3b82f6' },
   { id: 'ANALYST', name: 'Data-Forge', description: 'Financial Intelligence.', status: 'IDLE', color: '#10b981' },
   { id: 'LEGAL', name: 'Lex-Analyst', description: 'Legal Logic Engine.', status: 'IDLE', color: '#ec4899' },
@@ -57,9 +58,19 @@ const App: React.FC = () => {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [view, setView] = useState<ViewType>('OPERATIONS');
   
-  const [discoveryQuota, setDiscoveryQuota] = useState(5);
+  const [discoveryQuota, setDiscoveryQuota] = useState(() => {
+    const saved = localStorage.getItem('sr_quota');
+    return saved ? parseInt(saved) : 5;
+  });
   const [isAutoScouting, setIsAutoScouting] = useState(false);
-  const [locationHint] = useState({ state: 'FL', county: 'Miami-Dade' });
+  const [autoStartOnLoad, setAutoStartOnLoad] = useState(() => localStorage.getItem('sr_autostart') === 'true');
+  
+  const [locationHint, setLocationHint] = useState(() => {
+    const saved = localStorage.getItem('sr_location');
+    return saved ? JSON.parse(saved) : { state: 'FL', county: 'Miami-Dade' };
+  });
+  const [searchMode, setSearchMode] = useState<'GEOGRAPHIC' | 'CUSTOM'>('GEOGRAPHIC');
+  const [customQuery, setCustomQuery] = useState('');
 
   const [isDeepThinking, setIsDeepThinking] = useState(false);
   const [masterResult, setMasterResult] = useState<string | null>(null);
@@ -71,6 +82,9 @@ const App: React.FC = () => {
 
   useEffect(() => { localStorage.setItem('sr_leads', JSON.stringify(leads)); }, [leads]);
   useEffect(() => { localStorage.setItem('sr_auth', isAuthenticated.toString()); }, [isAuthenticated]);
+  useEffect(() => { localStorage.setItem('sr_location', JSON.stringify(locationHint)); }, [locationHint]);
+  useEffect(() => { localStorage.setItem('sr_autostart', autoStartOnLoad.toString()); }, [autoStartOnLoad]);
+  useEffect(() => { localStorage.setItem('sr_quota', discoveryQuota.toString()); }, [discoveryQuota]);
 
   const selectedLead = useMemo(() => leads.find(l => l.id === selectedLeadId) || null, [leads, selectedLeadId]);
 
@@ -120,25 +134,41 @@ const App: React.FC = () => {
         agentId: 'STRATEGIST',
         timestamp: new Date(),
         action: 'Stage Advanced',
-        details: `Progressed to ${nextStatus}`
+        details: `Lexicon Swarm progressed ${lead.ownerName} to ${nextStatus}`
       }, ...lead.crmHistory]
     });
     addLog('STRATEGIST', `Advanced ${lead.ownerName} to ${nextStatus}`, 'SUCCESS', leadId);
   };
 
   const runDiscovery = async (isManual = true) => {
+    // quota check
+    if (leads.length >= discoveryQuota) {
+      addLog('SCOUTER', `Resource Quota Exhausted (${discoveryQuota}/${discoveryQuota}). Discovery Halted.`, 'WARNING');
+      setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'IDLE' } : a));
+      setIsAutoScouting(false);
+      return;
+    }
+
     if (isManual) setIsAutoScouting(false);
     setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'WORKING' } : a));
     
     try {
-      addLog('SCOUTER', `Scanning ${locationHint.county} public records...`, 'INFO');
-      const result = await scoutSurplusFunds(locationHint.state, locationHint.county);
+      const targetStr = searchMode === 'GEOGRAPHIC' 
+        ? `${locationHint.county}, ${locationHint.state}`
+        : customQuery || "general surplus opportunities";
+
+      addLog('SCOUTER', `Target Lock: [${targetStr}]. Executing Discovery Directive...`, 'INFO');
+      
+      const result = await scoutSurplusFunds(
+        searchMode === 'GEOGRAPHIC' ? locationHint.state : '', 
+        searchMode === 'GEOGRAPHIC' ? locationHint.county : customQuery
+      );
       
       if (!result.text || result.text.length < 10) {
-        throw new Error("EMPTY_RESULT: No meaningful data returned.");
+        throw new Error("EMPTY_RESULT: No meaningful data returned from search grounding.");
       }
 
-      const leadData = await analyzeLead(`Parsing: ${result.text.slice(0, 500)}`);
+      const leadData = await analyzeLead(`Parsing packet for Tom: ${result.text.slice(0, 1000)}`);
       
       const isDuplicate = leads.some(l => 
         l.ownerName.toLowerCase() === leadData.ownerName?.toLowerCase() || 
@@ -146,10 +176,10 @@ const App: React.FC = () => {
       );
 
       if (isDuplicate) {
-        addLog('SCOUTER', `Target already in pipeline: ${leadData.ownerName}. Re-scanning...`, 'WARNING');
+        addLog('SCOUTER', `Duplicate found: ${leadData.ownerName}. Searching new block...`, 'WARNING');
+        // Recursively trigger next if still under quota and in auto-mode
         if (isAutoScouting) {
-          // Slow down the loop significantly to respect API quota
-          setTimeout(() => runDiscovery(false), 20000); 
+          setTimeout(() => runDiscovery(false), 30000); 
         } else {
           setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'IDLE' } : a));
         }
@@ -162,38 +192,42 @@ const App: React.FC = () => {
         amount: leadData.amount || 0,
         lastKnownAddress: '',
         propertyAddress: '',
-        county: locationHint.county.toUpperCase(),
-        state: locationHint.state.toUpperCase(),
-        courtCounty: `${locationHint.county.toUpperCase()} COURT`,
+        county: (searchMode === 'GEOGRAPHIC' ? locationHint.county : (leadData.county || 'UNKNOWN')).toUpperCase(),
+        state: (searchMode === 'GEOGRAPHIC' ? locationHint.state : (leadData.state || 'UNKNOWN')).toUpperCase(),
+        courtCounty: `${(searchMode === 'GEOGRAPHIC' ? locationHint.county : 'LOCAL').toUpperCase()} COURT`,
         verified: 'PENDING',
         socials: {},
         status: 'DISCOVERED',
         sourceUrl: result.sources?.[0]?.uri || '',
         notes: [],
-        crmHistory: [{ id: '1', agentId: 'SCOUTER', timestamp: new Date(), action: 'Discovery', details: 'Record identified via search grounding.' }],
+        crmHistory: [{ id: '1', agentId: 'SCOUTER', timestamp: new Date(), action: 'Discovery', details: `Target identified via Lexicon Search Grounding.` }],
         emailHistory: [],
         documents: [],
         priorityScore: 0,
         caseNumber: leadData.caseNumber,
         latLng: { 
-          lat: 25.7617 + (Math.random() - 0.5) * 0.1, 
-          lng: -80.1918 + (Math.random() - 0.5) * 0.1 
+          lat: 25.7617 + (Math.random() - 0.5) * 5.0, 
+          lng: -80.1918 + (Math.random() - 0.5) * 5.0 
         }
       };
 
       newLead.priorityScore = await calculatePriorityScore(newLead);
       setLeads(prev => [newLead, ...prev]);
-      addLog('SCOUTER', `Success: $${newLead.amount.toLocaleString()} Found. Priority: ${newLead.priorityScore}%`, 'SUCCESS', newLead.id);
+      addLog('SCOUTER', `Discovery Complete: $${newLead.amount.toLocaleString()}. Priority ${newLead.priorityScore}%`, 'SUCCESS', newLead.id);
       
-      if (isAutoScouting && leads.length + 1 < discoveryQuota) {
-        // Slow down the loop significantly to respect API quota
-        setTimeout(() => runDiscovery(false), 20000); 
+      // Check quota again after addition
+      if (isAutoScouting && (leads.length) < discoveryQuota) {
+        setTimeout(() => runDiscovery(false), 30000); 
       } else {
+        if (isAutoScouting) {
+           addLog('STRATEGIST', `Quota Met (${discoveryQuota}). Deactivating auto-swarm.`, 'SUCCESS');
+        }
         setIsAutoScouting(false);
         setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'SUCCESS' } : a));
       }
     } catch (e: any) {
-      addLog('SCOUTER', `Interference: ${e.message}`, 'ERROR');
+      const errorMsg = typeof e === 'string' ? e : e.message || JSON.stringify(e);
+      addLog('SCOUTER', `Execution Error: ${errorMsg}. Self-annealing triggered.`, 'ERROR');
       setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'ERROR' } : a));
       setIsAutoScouting(false);
     }
@@ -205,13 +239,26 @@ const App: React.FC = () => {
     if (newState) runDiscovery(false);
   };
 
+  // Improved auto-start with quota awareness
+  useEffect(() => {
+    if (isAuthenticated && autoStartOnLoad) {
+      if (leads.length < discoveryQuota) {
+        addLog('STRATEGIST', 'AUTO-START ACTIVATED: Initiating Lexicon Discovery Sequence...', 'INFO');
+        setIsAutoScouting(true);
+        runDiscovery(false);
+      } else {
+        addLog('STRATEGIST', `AUTO-START ABORTED: Quota (${discoveryQuota}) already satisfied.`, 'INFO');
+      }
+    }
+  }, [isAuthenticated]);
+
   const runMasterStrategy = async (lead: Lead) => {
     setIsDeepThinking(true);
     setAgents(prev => prev.map(a => a.id === 'STRATEGIST' ? { ...a, status: 'WORKING' } : a));
     try {
       const res = await generateMasterStrategy(lead);
       setMasterResult(res);
-      addLog('STRATEGIST', `Generated master blueprint for ${lead.ownerName}`, 'SUCCESS', lead.id);
+      addLog('STRATEGIST', `Generated Master Blueprint for Tom regarding ${lead.ownerName}`, 'SUCCESS', lead.id);
       setAgents(prev => prev.map(a => a.id === 'STRATEGIST' ? { ...a, status: 'SUCCESS' } : a));
     } catch (err) { setAgents(prev => prev.map(a => a.id === 'STRATEGIST' ? { ...a, status: 'ERROR' } : a));
     } finally { setIsDeepThinking(false); }
@@ -223,7 +270,7 @@ const App: React.FC = () => {
     try {
       const res = await optimizeSkipTracingStrategy([], lead);
       setThinkingResult(res);
-      addLog('TRACER', `Deep trace complete for ${lead.ownerName}`, 'SUCCESS', lead.id);
+      addLog('TRACER', `Deep Trace successful for ${lead.ownerName}`, 'SUCCESS', lead.id);
       setAgents(prev => prev.map(a => a.id === 'TRACER' ? { ...a, status: 'SUCCESS' } : a));
     } catch (err) { setAgents(prev => prev.map(a => a.id === 'TRACER' ? { ...a, status: 'ERROR' } : a));
     } finally { setIsDeepThinking(false); }
@@ -231,13 +278,13 @@ const App: React.FC = () => {
 
   const runOutreachGeneration = async (lead: Lead) => {
     setIsDeepThinking(true);
-    setAgents(prev => prev.map(a => a.id === 'OUTREACH' ? { ...a, status: 'WORKING' } : a));
+    setAgents(prev => prev.map(a => a.id['CORRESPONDENT'] ? { ...a, status: 'WORKING' } : a));
     try {
       const res = await generateOutreachPlan(lead);
       setOutreachResult(res);
-      addLog('OUTREACH', `Campaign sequences generated for ${lead.ownerName}`, 'SUCCESS', lead.id);
-      setAgents(prev => prev.map(a => a.id === 'OUTREACH' ? { ...a, status: 'SUCCESS' } : a));
-    } catch (err) { setAgents(prev => prev.map(a => a.id === 'OUTREACH' ? { ...a, status: 'ERROR' } : a));
+      addLog('CORRESPONDENT', `Outreach directive synthesized for ${lead.ownerName}`, 'SUCCESS', lead.id);
+      setAgents(prev => prev.map(a => a.id === 'CORRESPONDENT' ? { ...a, status: 'SUCCESS' } : a));
+    } catch (err) { setAgents(prev => prev.map(a => a.id === 'CORRESPONDENT' ? { ...a, status: 'ERROR' } : a));
     } finally { setIsDeepThinking(false); }
   };
 
@@ -247,7 +294,7 @@ const App: React.FC = () => {
     try {
       const res = await generateClosingStrategy(lead);
       setClosingResult(res);
-      addLog('LEGAL', `Filing strategy ready for ${lead.ownerName}`, 'SUCCESS', lead.id);
+      addLog('LEGAL', `Legal Filing Strategy ready for Tom's review.`, 'SUCCESS', lead.id);
       setAgents(prev => prev.map(a => a.id === 'LEGAL' ? { ...a, status: 'SUCCESS' } : a));
     } catch (err) { setAgents(prev => prev.map(a => a.id === 'LEGAL' ? { ...a, status: 'ERROR' } : a));
     } finally { setIsDeepThinking(false); }
@@ -259,7 +306,7 @@ const App: React.FC = () => {
     try {
       const res = await generateFilingChecklist(lead);
       setFilerResult(res);
-      addLog('FILER', `Filing checklist created for ${lead.ownerName}`, 'SUCCESS', lead.id);
+      addLog('FILER', `Deterministic Checklist generated for ${lead.ownerName}`, 'SUCCESS', lead.id);
       setAgents(prev => prev.map(a => a.id === 'FILER' ? { ...a, status: 'SUCCESS' } : a));
     } catch (err) { setAgents(prev => prev.map(a => a.id === 'FILER' ? { ...a, status: 'ERROR' } : a));
     } finally { setIsDeepThinking(false); }
@@ -271,25 +318,47 @@ const App: React.FC = () => {
     try {
       const res = await getPropertyInsights(lead.propertyAddress || lead.lastKnownAddress, lead.latLng?.lat, lead.latLng?.lng);
       setReconResult(res.text);
-      addLog('SURVEYOR', `Recon successful for ${lead.ownerName}`, 'SUCCESS', lead.id);
+      addLog('SURVEYOR', `Geographic Recon successful for ${lead.ownerName}`, 'SUCCESS', lead.id);
       setAgents(prev => prev.map(a => a.id === 'SURVEYOR' ? { ...a, status: 'SUCCESS' } : a));
     } catch (err) { setAgents(prev => prev.map(a => a.id === 'SURVEYOR' ? { ...a, status: 'ERROR' } : a));
     } finally { setIsDeepThinking(false); }
   };
 
+  const handleVoiceCommand = (command: string) => {
+    const normalized = command.toLowerCase();
+    addLog('STRATEGIST', `Voice Command Recognized: "${command}"`, 'SUCCESS');
+    
+    if (normalized.includes('discovery') || normalized.includes('scout')) {
+      runDiscovery(true);
+    } else if (normalized.includes('map')) {
+      setView('TACTICAL_MAP');
+    } else if (normalized.includes('deck') || normalized.includes('operations')) {
+      setView('OPERATIONS');
+    } else if (normalized.includes('audit') || normalized.includes('terminal')) {
+      setView('AUDIT');
+    } else if (normalized.includes('intelligence') || normalized.includes('hub')) {
+      setView('INTELLIGENCE');
+    } else if (normalized.includes('enable auto') || normalized.includes('start auto')) {
+      setIsAutoScouting(true);
+      runDiscovery(false);
+    } else if (normalized.includes('disable auto') || normalized.includes('stop auto')) {
+      setIsAutoScouting(false);
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="h-screen bg-black flex items-center justify-center p-6 relative">
-        <div className="absolute inset-0 bg-indigo-500/5 blur-[120px] rounded-full scale-50" />
-        <div className="w-full max-sm p-12 bg-[#0c0c0e] rounded-[32px] border border-white/5 shadow-2xl relative">
+        <div className="absolute inset-0 bg-indigo-500/10 blur-[150px] rounded-full scale-50" />
+        <div className="w-full max-w-md p-12 bg-[#0c0c0e] rounded-[40px] border border-white/5 shadow-3xl relative">
           <div className="flex flex-col items-center mb-12 text-center">
-            <div className="w-16 h-16 bg-white rounded-[20px] mb-8 flex items-center justify-center shadow-xl shadow-white/5">
-              <div className="w-8 h-8 bg-black rounded-lg" />
+            <div className="w-20 h-20 bg-white rounded-[24px] mb-8 flex items-center justify-center shadow-2xl shadow-white/5">
+              <div className="w-10 h-10 bg-black rounded-xl" />
             </div>
-            <h1 className="text-2xl font-extrabold tracking-tight">Recovery Console</h1>
-            <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.4em] mt-3 leading-relaxed">Identity Auth Required</p>
+            <h1 className="text-3xl font-black tracking-tight uppercase">Lexicon <span className="text-indigo-500">Solutions</span></h1>
+            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.4em] mt-4 leading-relaxed">Master Identity Authentication Required</p>
           </div>
-          <button onClick={() => setIsAuthenticated(true)} className="w-full bg-indigo-600 text-white font-bold py-5 rounded-2xl text-sm transition-all hover:bg-indigo-500 active:scale-[0.98]">Initialize Linkage</button>
+          <button onClick={() => setIsAuthenticated(true)} className="w-full bg-indigo-600 text-white font-black py-6 rounded-2xl text-[12px] uppercase tracking-widest transition-all hover:bg-indigo-500 active:scale-[0.98]">Initialize Master Link</button>
         </div>
       </div>
     );
@@ -297,83 +366,147 @@ const App: React.FC = () => {
 
   return (
     <div className="h-screen flex overflow-hidden bg-black selection:bg-indigo-500/30">
-      <aside className="w-[280px] border-r border-zinc flex flex-col bg-[#09090b] z-40">
+      <aside className="w-[300px] border-r border-zinc flex flex-col bg-[#050507] z-40">
         <div className="p-8 pb-4">
-          <div className="flex items-center gap-3 mb-10 group cursor-default">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <div className="w-4 h-4 bg-white rounded-sm" />
+          <div className="flex items-center gap-4 mb-10 group cursor-default">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center lexicon-glow">
+              <div className="w-5 h-5 bg-white rounded-md" />
             </div>
-            <span className="text-lg font-extrabold tracking-tighter">SR-AI <span className="text-indigo-500">Workhorse</span></span>
+            <div className="flex flex-col">
+               <span className="text-lg font-black tracking-tighter text-white uppercase">Lexicon</span>
+               <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Solutions Swarm</span>
+            </div>
           </div>
           <nav className="space-y-1">
-            <button onClick={() => setView('OPERATIONS')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${view === 'OPERATIONS' ? 'bg-white/5 text-indigo-400' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
-              Operations Deck
+            <button onClick={() => setView('OPERATIONS')} className={`w-full text-left px-5 py-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-4 ${view === 'OPERATIONS' ? 'bg-white/5 text-indigo-400' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
+              Operational Deck
             </button>
-            <button onClick={() => setView('TACTICAL_MAP')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${view === 'TACTICAL_MAP' ? 'bg-white/5 text-indigo-400' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
-              Tactical Map
+            <button onClick={() => setView('TACTICAL_MAP')} className={`w-full text-left px-5 py-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-4 ${view === 'TACTICAL_MAP' ? 'bg-white/5 text-indigo-400' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
+              Tactical Heatmap
             </button>
-            <button onClick={() => setView('INTELLIGENCE')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${view === 'INTELLIGENCE' ? 'bg-white/5 text-indigo-400' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
+            <button onClick={() => setView('INTELLIGENCE')} className={`w-full text-left px-5 py-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-4 ${view === 'INTELLIGENCE' ? 'bg-white/5 text-indigo-400' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
               Intelligence Hub
             </button>
-            <button onClick={() => setView('AUDIT')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${view === 'AUDIT' ? 'bg-white/5 text-indigo-400' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
-              Audit Stream
+            <button onClick={() => setView('AUDIT')} className={`w-full text-left px-5 py-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-4 ${view === 'AUDIT' ? 'bg-white/5 text-indigo-400' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
+              System Audit Stream
             </button>
           </nav>
         </div>
-        <div className="flex-1 overflow-y-auto p-8 pt-4 custom-scroll space-y-8">
+        <div className="flex-1 overflow-y-auto p-8 pt-4 custom-scroll space-y-10">
           <div>
-            <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-6 px-1">Agent Swarm</h3>
+            <h3 className="text-[10px] font-black text-zinc-700 uppercase tracking-[0.3em] mb-6 px-1">Agent Swarm</h3>
             <div className="space-y-1">
               {agents.map(agent => (
                 <div key={agent.id} className="relative">
                   <AgentCard agent={agent} />
                   {agent.id === 'SCOUTER' && isAutoScouting && (
-                    <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping" />
+                    <div className="absolute top-3 right-3 w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping" />
                   )}
                 </div>
               ))}
             </div>
           </div>
         </div>
-        <div className="p-6 border-t border-zinc bg-zinc-950/30">
-          <LiveAudioController />
-          <button onClick={() => setIsAuthenticated(false)} className="mt-4 w-full text-[10px] font-bold text-zinc-600 uppercase tracking-widest hover:text-rose-500 transition-colors">Terminate Session</button>
+        <div className="p-8 border-t border-zinc bg-zinc-950/20">
+          <LiveAudioController onCommand={handleVoiceCommand} />
+          <button onClick={() => setIsAuthenticated(false)} className="mt-6 w-full text-[10px] font-black text-zinc-700 uppercase tracking-widest hover:text-rose-500 transition-colors">Terminate Master Session</button>
         </div>
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 bg-[#0c0c0e] relative">
         <div className="h-10 bg-black border-b border-zinc overflow-hidden flex items-center">
-            <div className="animate-marquee whitespace-nowrap flex gap-12">
+            <div className="animate-marquee whitespace-nowrap flex gap-16">
                {[...Array(2)].map((_, i) => (
-                  <div key={i} className="flex gap-12 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600 mono">
-                    <span>SYSTEM STATUS: <span className="text-emerald-500">OPTIMAL</span></span>
-                    <span>PIPELINE VALUE: <span className="text-indigo-400">${stats.totalDiscovered.toLocaleString()}</span></span>
-                    <span>ACTIVE TARGETS: <span className="text-white">{stats.activeFiles}</span></span>
+                  <div key={i} className="flex gap-16 text-[10px] font-black uppercase tracking-[0.3em] text-zinc-700 mono">
+                    <span>IDENTITY: <span className="text-indigo-400">THOMAS GRONEK</span></span>
+                    <span>PROTOCOL: <span className="text-emerald-500">3-LAYER ARCHITECTURE ACTIVE</span></span>
+                    <span>SYSTEM STATE: <span className="text-emerald-500">STABLE</span></span>
+                    <span>SWARM ASSET VALUE: <span className="text-white">${stats.totalDiscovered.toLocaleString()}</span></span>
+                    <span>SELF-ANNEALING: <span className="text-amber-500">READY</span></span>
                   </div>
                ))}
             </div>
         </div>
-        <header className="h-16 border-b border-zinc flex items-center justify-between px-8 bg-black/40 backdrop-blur-xl sticky top-0 z-30">
-          <h2 className="text-sm font-extrabold tracking-tight uppercase tracking-widest">{view.replace('_', ' ')}</h2>
-          
-          <div className="flex items-center gap-6">
-            <div className="flex items-center bg-zinc-900 border border-zinc rounded-xl px-4 py-1.5 gap-3">
-               <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Quota</span>
-               <input 
-                 type="number" 
-                 value={discoveryQuota} 
-                 onChange={(e) => setDiscoveryQuota(Math.max(1, parseInt(e.target.value) || 1))}
-                 className="w-10 bg-transparent text-xs font-bold text-indigo-400 focus:outline-none"
-               />
-               <div className="w-[1px] h-4 bg-zinc-800" />
-               <button 
-                onClick={toggleAutoScout}
-                className={`text-[9px] font-black uppercase tracking-widest transition-colors ${isAutoScouting ? 'text-rose-500 animate-pulse' : 'text-emerald-500'}`}
-               >
-                 {isAutoScouting ? 'Stop' : 'Auto-Scout'}
-               </button>
+        
+        <header className="h-28 border-b border-zinc flex flex-col justify-center px-10 bg-black/40 backdrop-blur-3xl sticky top-0 z-30">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-6">
+               <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">Target Directives</span>
+                  <div className="flex items-center gap-2 bg-zinc-900/50 border border-zinc p-2 rounded-xl">
+                    <select 
+                      value={searchMode} 
+                      onChange={(e) => setSearchMode(e.target.value as any)}
+                      className="bg-transparent text-[10px] font-black text-zinc-400 border-none focus:outline-none px-3 uppercase tracking-tighter"
+                    >
+                      <option value="GEOGRAPHIC">Geographic Recon</option>
+                      <option value="CUSTOM">Deep Search Execution</option>
+                    </select>
+                    <div className="w-[1px] h-4 bg-zinc-800" />
+                    {searchMode === 'GEOGRAPHIC' ? (
+                      <div className="flex items-center gap-3">
+                        <input 
+                          type="text" 
+                          placeholder="STATE" 
+                          value={locationHint.state}
+                          onChange={(e) => setLocationHint({...locationHint, state: e.target.value.toUpperCase().slice(0, 2)})}
+                          className="w-12 bg-transparent text-[10px] font-black text-white focus:outline-none placeholder-zinc-700 uppercase text-center"
+                        />
+                        <input 
+                          type="text" 
+                          placeholder="ENTER COUNTY..." 
+                          value={locationHint.county}
+                          onChange={(e) => setLocationHint({...locationHint, county: e.target.value})}
+                          className="w-40 bg-transparent text-[10px] font-black text-white focus:outline-none placeholder-zinc-700"
+                        />
+                      </div>
+                    ) : (
+                      <input 
+                        type="text" 
+                        placeholder="ENTER DEEP SEARCH COMMAND..." 
+                        value={customQuery}
+                        onChange={(e) => setCustomQuery(e.target.value)}
+                        className="w-72 bg-transparent text-[10px] font-black text-white focus:outline-none placeholder-zinc-700"
+                      />
+                    )}
+                  </div>
+               </div>
             </div>
-            <button onClick={() => runDiscovery(true)} className="bg-white text-black px-6 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all hover:bg-zinc-200">Manual Scout</button>
+
+            <div className="flex items-center gap-8">
+              <div className="flex items-center gap-4">
+                <div className="flex flex-col items-end">
+                   <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Auto-Start On Load</span>
+                   <button 
+                     onClick={() => setAutoStartOnLoad(!autoStartOnLoad)}
+                     className={`p-1.5 rounded-lg border transition-all ${autoStartOnLoad ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-zinc bg-zinc-900/50'}`}
+                   >
+                     <div className={`w-8 h-4 rounded-full relative transition-colors ${autoStartOnLoad ? 'bg-indigo-600' : 'bg-zinc-800'}`}>
+                        <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all shadow-sm ${autoStartOnLoad ? 'left-4.5' : 'left-0.5'}`} />
+                     </div>
+                   </button>
+                </div>
+                <div className="flex flex-col items-end mr-6">
+                   <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Queue Resource Quota</span>
+                   <div className="flex items-center bg-zinc-900/50 border border-zinc rounded-xl px-5 py-2.5 gap-4">
+                     <input 
+                       type="number" 
+                       value={discoveryQuota} 
+                       onChange={(e) => setDiscoveryQuota(Math.max(1, parseInt(e.target.value) || 1))}
+                       className="w-10 bg-transparent text-xs font-black text-indigo-400 focus:outline-none text-center"
+                     />
+                     <div className="w-[1px] h-5 bg-zinc-800" />
+                     <button 
+                      onClick={toggleAutoScout}
+                      className={`text-[10px] font-black uppercase tracking-widest transition-all ${isAutoScouting ? 'text-rose-500 animate-pulse' : 'text-emerald-500'}`}
+                     >
+                       {isAutoScouting ? 'Cease Swarm' : 'Initiate Swarm'}
+                     </button>
+                   </div>
+                </div>
+              </div>
+              <button onClick={() => runDiscovery(true)} className="bg-white text-black px-8 py-4 rounded-xl text-[12px] font-black uppercase tracking-widest transition-all hover:bg-zinc-200 shadow-2xl shadow-white/5 active:scale-95">Manual Execution</button>
+            </div>
           </div>
         </header>
 
@@ -389,12 +522,12 @@ const App: React.FC = () => {
            )}
         </div>
 
-        <div className={`fixed bottom-10 z-[60] w-[400px] transition-all duration-500 ease-in-out ${selectedLead ? 'right-[640px]' : 'right-10'}`}>
+        <div className={`fixed bottom-12 z-[60] w-[420px] transition-all duration-700 ease-in-out ${selectedLead ? 'right-[660px]' : 'right-12'}`}>
            <ChatBot />
         </div>
       </main>
 
-      <div className={`dossier-panel fixed top-0 right-0 h-full w-[600px] bg-[#0c0c0e] border-l border-zinc z-50 flex flex-col shadow-[-40px_0_80px_rgba(0,0,0,0.8)] ${selectedLead ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`dossier-panel fixed top-0 right-0 h-full w-[640px] bg-[#0c0c0e] border-l border-zinc z-50 flex flex-col shadow-[-60px_0_120px_rgba(0,0,0,0.9)] ${selectedLead ? 'translate-x-0' : 'translate-x-full'}`}>
         {selectedLead && (
           <LeadDossier 
             lead={selectedLead}

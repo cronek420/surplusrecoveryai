@@ -5,9 +5,16 @@ import { AgentRole, Lead, PlaybookEntry } from "./types";
 // Helper to get fresh AI instance
 const getAI = () => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey === "your_gemini_api_key_here") {
-    throw new Error("MISSING_API_KEY: Please set your API_KEY in the .env file and restart the server.");
+  
+  // Specific checks for common local setup issues
+  if (!apiKey) {
+    throw new Error("API_KEY is undefined. Ensure you have a file named '.env' (not 'env.env' or '.env.txt') and restart your npm dev server.");
   }
+  
+  if (apiKey === "your_gemini_api_key_here") {
+    throw new Error("API_KEY is still the placeholder. Please replace 'your_gemini_api_key_here' in your .env file with a real key from AI Studio.");
+  }
+  
   return new GoogleGenAI({ apiKey });
 };
 

@@ -62,7 +62,7 @@ const LiveAudioController: React.FC = () => {
 
   const startSession = async () => {
     // Guidelines: Always create a new GoogleGenAI instance right before making an API call
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     
     if (!audioContextRef.current) {
@@ -137,7 +137,8 @@ const LiveAudioController: React.FC = () => {
         },
       },
       config: {
-        responseModalalities: [Modality.AUDIO],
+        // Fix: corrected property name from responseModalalities to responseModalities
+        responseModalities: [Modality.AUDIO],
         outputAudioTranscription: {},
         systemInstruction: "You are a real-time voice strategist for a surplus recovery firm. Be concise, professional, and clear."
       }

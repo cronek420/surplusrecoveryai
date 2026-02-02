@@ -21,16 +21,20 @@ const ChatBot: React.FC = () => {
     setLoading(true);
 
     try {
-      // Guidelines: Initializing with direct env variable
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const apiKey = process.env.API_KEY;
+      if (!apiKey || apiKey === "your_gemini_api_key_here") {
+        throw new Error("API Key configuration error. Check your .env file.");
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
       const chat = ai.chats.create({
         model: 'gemini-3-pro-preview',
         config: { systemInstruction: "You are the SurplusRecovery AI Assistant. You help users navigate the legal complexities of recovering surplus funds from government auctions." }
       });
       const response = await chat.sendMessage({ message: userMsg });
-      setMessages(prev => [...prev, { role: 'model', text: response.text || "I'm not sure about that." }]);
-    } catch (e) {
-      setMessages(prev => [...prev, { role: 'model', text: "Error connecting to service." }]);
+      setMessages(prev => [...prev, { role: 'model', text: response.text || "No response content." }]);
+    } catch (e: any) {
+      setMessages(prev => [...prev, { role: 'model', text: `ERROR: ${e.message || "Connection failed."}` }]);
     } finally {
       setLoading(false);
     }

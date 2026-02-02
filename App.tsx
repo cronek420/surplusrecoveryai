@@ -62,10 +62,10 @@ const App: React.FC = () => {
   const [locationHint] = useState({ state: 'FL', county: 'Miami-Dade' });
 
   const [isDeepThinking, setIsDeepThinking] = useState(false);
+  const [masterResult, setMasterResult] = useState<string | null>(null);
   const [thinkingResult, setThinkingResult] = useState<string | null>(null);
   const [outreachResult, setOutreachResult] = useState<string | null>(null);
   const [closingResult, setClosingResult] = useState<string | null>(null);
-  const [masterResult, setMasterResult] = useState<string | null>(null);
   const [filerResult, setFilerResult] = useState<string | null>(null);
   const [reconResult, setReconResult] = useState<string | null>(null);
 
@@ -135,41 +135,46 @@ const App: React.FC = () => {
       const result = await scoutSurplusFunds(locationHint.state, locationHint.county);
       
       if (!result.text || result.text.length < 10) {
-        throw new Error("EMPTY_RESULT: No meaningful data returned from search grounding.");
+        throw new Error("EMPTY_RESULT: No meaningful data returned.");
       }
 
-      const leadData = await analyzeLead(`Extracting details from: ${result.text.slice(0, 300)}`);
+      const leadData = await analyzeLead(`Parsing: ${result.text.slice(0, 500)}`);
       
       const isDuplicate = leads.some(l => 
-        l.ownerName.toLowerCase() === leadData.ownerName?.toLowerCase() && 
-        Math.abs(l.amount - leadData.amount) < 100
+        l.ownerName.toLowerCase() === leadData.ownerName?.toLowerCase() || 
+        (leadData.caseNumber && l.caseNumber === leadData.caseNumber)
       );
 
       if (isDuplicate) {
-        addLog('SCOUTER', `Duplicate data found for ${leadData.ownerName}. Searching next record...`, 'WARNING');
-        if (isAutoScouting) setTimeout(() => runDiscovery(false), 3000);
-        else setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'IDLE' } : a));
+        addLog('SCOUTER', `Target already in pipeline: ${leadData.ownerName}. Re-scanning...`, 'WARNING');
+        if (isAutoScouting) {
+          // Slow down the loop significantly to respect API quota
+          setTimeout(() => runDiscovery(false), 20000); 
+        } else {
+          setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'IDLE' } : a));
+        }
         return;
       }
 
       const newLead: Lead = {
         id: Math.random().toString(36).substring(7).toUpperCase(),
-        ownerName: leadData.ownerName || 'PENDING IDENT',
+        ownerName: leadData.ownerName || 'UNKNOWN',
         amount: leadData.amount || 0,
-        lastKnownAddress: leadData.lastKnownAddress || '',
-        propertyAddress: leadData.propertyAddress || '',
+        lastKnownAddress: '',
+        propertyAddress: '',
         county: locationHint.county.toUpperCase(),
         state: locationHint.state.toUpperCase(),
         courtCounty: `${locationHint.county.toUpperCase()} COURT`,
         verified: 'PENDING',
         socials: {},
         status: 'DISCOVERED',
-        sourceUrl: result.sources[0]?.uri || '',
+        sourceUrl: result.sources?.[0]?.uri || '',
         notes: [],
-        crmHistory: [{ id: '1', agentId: 'SCOUTER', timestamp: new Date(), action: 'Discovery', details: 'Record identified.' }],
+        crmHistory: [{ id: '1', agentId: 'SCOUTER', timestamp: new Date(), action: 'Discovery', details: 'Record identified via search grounding.' }],
         emailHistory: [],
         documents: [],
         priorityScore: 0,
+        caseNumber: leadData.caseNumber,
         latLng: { 
           lat: 25.7617 + (Math.random() - 0.5) * 0.1, 
           lng: -80.1918 + (Math.random() - 0.5) * 0.1 
@@ -177,19 +182,18 @@ const App: React.FC = () => {
       };
 
       newLead.priorityScore = await calculatePriorityScore(newLead);
-
       setLeads(prev => [newLead, ...prev]);
-      addLog('SCOUTER', `Success: $${newLead.amount.toLocaleString()} Recovery Identified. Priority: ${newLead.priorityScore}%`, 'SUCCESS', newLead.id);
+      addLog('SCOUTER', `Success: $${newLead.amount.toLocaleString()} Found. Priority: ${newLead.priorityScore}%`, 'SUCCESS', newLead.id);
       
       if (isAutoScouting && leads.length + 1 < discoveryQuota) {
-        setTimeout(() => runDiscovery(false), 4000);
+        // Slow down the loop significantly to respect API quota
+        setTimeout(() => runDiscovery(false), 20000); 
       } else {
         setIsAutoScouting(false);
         setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'SUCCESS' } : a));
       }
     } catch (e: any) {
-      const errorMsg = e.message || "Unknown error during scout";
-      addLog('SCOUTER', `Protocol Breach: ${errorMsg}`, 'ERROR');
+      addLog('SCOUTER', `Interference: ${e.message}`, 'ERROR');
       setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'ERROR' } : a));
       setIsAutoScouting(false);
     }
@@ -209,8 +213,7 @@ const App: React.FC = () => {
       setMasterResult(res);
       addLog('STRATEGIST', `Generated master blueprint for ${lead.ownerName}`, 'SUCCESS', lead.id);
       setAgents(prev => prev.map(a => a.id === 'STRATEGIST' ? { ...a, status: 'SUCCESS' } : a));
-    } catch (err) {
-      setAgents(prev => prev.map(a => a.id === 'STRATEGIST' ? { ...a, status: 'ERROR' } : a));
+    } catch (err) { setAgents(prev => prev.map(a => a.id === 'STRATEGIST' ? { ...a, status: 'ERROR' } : a));
     } finally { setIsDeepThinking(false); }
   };
 
@@ -220,10 +223,9 @@ const App: React.FC = () => {
     try {
       const res = await optimizeSkipTracingStrategy([], lead);
       setThinkingResult(res);
-      addLog('TRACER', `Deep skip-trace complete for ${lead.ownerName}`, 'SUCCESS', lead.id);
+      addLog('TRACER', `Deep trace complete for ${lead.ownerName}`, 'SUCCESS', lead.id);
       setAgents(prev => prev.map(a => a.id === 'TRACER' ? { ...a, status: 'SUCCESS' } : a));
-    } catch (err) {
-      setAgents(prev => prev.map(a => a.id === 'TRACER' ? { ...a, status: 'ERROR' } : a));
+    } catch (err) { setAgents(prev => prev.map(a => a.id === 'TRACER' ? { ...a, status: 'ERROR' } : a));
     } finally { setIsDeepThinking(false); }
   };
 
@@ -233,10 +235,9 @@ const App: React.FC = () => {
     try {
       const res = await generateOutreachPlan(lead);
       setOutreachResult(res);
-      addLog('OUTREACH', `Optimized outreach sequences generated for ${lead.ownerName}`, 'SUCCESS', lead.id);
+      addLog('OUTREACH', `Campaign sequences generated for ${lead.ownerName}`, 'SUCCESS', lead.id);
       setAgents(prev => prev.map(a => a.id === 'OUTREACH' ? { ...a, status: 'SUCCESS' } : a));
-    } catch (err) {
-      setAgents(prev => prev.map(a => a.id === 'OUTREACH' ? { ...a, status: 'ERROR' } : a));
+    } catch (err) { setAgents(prev => prev.map(a => a.id === 'OUTREACH' ? { ...a, status: 'ERROR' } : a));
     } finally { setIsDeepThinking(false); }
   };
 
@@ -246,10 +247,9 @@ const App: React.FC = () => {
     try {
       const res = await generateClosingStrategy(lead);
       setClosingResult(res);
-      addLog('LEGAL', `Legal closing strategy finalized for ${lead.ownerName}`, 'SUCCESS', lead.id);
+      addLog('LEGAL', `Filing strategy ready for ${lead.ownerName}`, 'SUCCESS', lead.id);
       setAgents(prev => prev.map(a => a.id === 'LEGAL' ? { ...a, status: 'SUCCESS' } : a));
-    } catch (err) {
-      setAgents(prev => prev.map(a => a.id === 'LEGAL' ? { ...a, status: 'ERROR' } : a));
+    } catch (err) { setAgents(prev => prev.map(a => a.id === 'LEGAL' ? { ...a, status: 'ERROR' } : a));
     } finally { setIsDeepThinking(false); }
   };
 
@@ -259,10 +259,9 @@ const App: React.FC = () => {
     try {
       const res = await generateFilingChecklist(lead);
       setFilerResult(res);
-      addLog('FILER', `Filing watchdog checklist compiled for ${lead.ownerName}`, 'SUCCESS', lead.id);
+      addLog('FILER', `Filing checklist created for ${lead.ownerName}`, 'SUCCESS', lead.id);
       setAgents(prev => prev.map(a => a.id === 'FILER' ? { ...a, status: 'SUCCESS' } : a));
-    } catch (err) {
-      setAgents(prev => prev.map(a => a.id === 'FILER' ? { ...a, status: 'ERROR' } : a));
+    } catch (err) { setAgents(prev => prev.map(a => a.id === 'FILER' ? { ...a, status: 'ERROR' } : a));
     } finally { setIsDeepThinking(false); }
   };
 
@@ -272,10 +271,9 @@ const App: React.FC = () => {
     try {
       const res = await getPropertyInsights(lead.propertyAddress || lead.lastKnownAddress, lead.latLng?.lat, lead.latLng?.lng);
       setReconResult(res.text);
-      addLog('SURVEYOR', `Property recon successful for ${lead.propertyAddress}`, 'SUCCESS', lead.id);
+      addLog('SURVEYOR', `Recon successful for ${lead.ownerName}`, 'SUCCESS', lead.id);
       setAgents(prev => prev.map(a => a.id === 'SURVEYOR' ? { ...a, status: 'SUCCESS' } : a));
-    } catch (err) {
-      setAgents(prev => prev.map(a => a.id === 'SURVEYOR' ? { ...a, status: 'ERROR' } : a));
+    } catch (err) { setAgents(prev => prev.map(a => a.id === 'SURVEYOR' ? { ...a, status: 'ERROR' } : a));
     } finally { setIsDeepThinking(false); }
   };
 

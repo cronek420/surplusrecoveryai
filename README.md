@@ -1,27 +1,37 @@
 
-# 🚀 SR-AI | Surplus Recovery Swarm - Local Setup
+# 🚀 SR-AI | Surplus Recovery Workhorse - Local Deployment
 
-This "Workhorse" application is built to run entirely in the browser using the Gemini API.
+This application is a professional agentic swarm for surplus funds recovery. To run it independently on your machine, follow the launch protocol below.
 
-## 🛠️ How to Run Locally
+## 🛠️ Launch Protocol
 
-1.  **Clone the directory** to your local machine.
-2.  **Serve the files** using any local web server. Since it uses ESM modules, you need a server (not just opening `index.html`).
-    ```bash
-    # Option A: If you have Node.js
-    npx serve .
+### 1. Environment Preparation
+Ensure you have **Node.js** (v18+) installed. Clone or copy all files into a directory on your machine.
 
-    # Option B: If you have Python
-    python -m http.server 8000
-    ```
-3.  **Open in Browser**: Visit `http://localhost:3000` (or `8000`).
-4.  **API Key**: The application expects `process.env.API_KEY` to be available. In a local environment, you may need to hardcode it in `index.html` within the `importmap` area or use a proxy. However, in this specific preview environment, it is automatically injected.
+### 2. Dependency Installation
+Open your terminal in the project directory and run:
+```bash
+npm install
+```
 
-## 📁 Key Features
-- **Scout-Net**: Automatic web scanning for surplus lists.
-- **Tactical Map**: Geographic visualization of recovery bounities.
-- **Dossier System**: High-fidelity OCR and agentic intelligence sessions.
-- **Voice Strategist**: Real-time native audio conversation via Gemini Live.
+### 3. API Key Configuration
+Create a file named `.env` in the root directory (or rename `.env.example`) and add your Gemini API Key:
+```env
+API_KEY=your_actual_api_key_here
+```
 
-## ⚖️ Disclaimer
-This tool is for educational purposes. Always ensure compliance with local jurisdictional laws regarding surplus recovery and solicitation.
+### 4. Ignite Swarm
+Start the local development server:
+```bash
+npm run dev
+```
+The application will automatically open at `http://localhost:3000`.
+
+## 📁 Intelligence Modules
+- **Operations Deck**: Real-time lead management and agent deployment.
+- **Tactical Map**: Geographic clustering of surplus capital.
+- **Intelligence Hub**: Global funnel analytics and neural orchestration.
+- **Live Strategist**: Voice-activated real-time recovery advisor.
+
+## ⚖️ Legal Disclaimer
+This software is an automation tool. Users are responsible for ensuring compliance with all jurisdictional statutes regarding surplus recovery, debt collection, and solicitation.

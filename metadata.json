@@ -1,0 +1,8 @@
+{
+  "name": "SurplusRecovery AI Workhorse",
+  "description": "Enterprise-grade agentic recovery system with automated Gmail outreach and legal intelligence grounding.",
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation"
+  ]
+}

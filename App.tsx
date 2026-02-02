@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Agent, Lead, ActivityLog, AgentRole, LeadStatus } from './types';
+import { Agent, Lead, ActivityLog, AgentRole, LeadStatus, ViewType } from './types';
 import AgentCard from './components/AgentCard';
 import LeadTable from './components/LeadTable';
 import Terminal from './components/Terminal';
@@ -8,16 +8,18 @@ import ChatBot from './components/ChatBot';
 import IntelligenceHub from './components/IntelligenceHub';
 import LeadDossier from './components/LeadDossier';
 import LiveAudioController from './components/LiveAudioController';
-import { scoutSurplusFunds, analyzeLead, optimizeSkipTracingStrategy, generateOutreachPlan, generateClosingStrategy, generateMasterStrategy, generateFilingChecklist } from './geminiService';
+import TacticalMap from './components/TacticalMap';
+import { scoutSurplusFunds, analyzeLead, optimizeSkipTracingStrategy, generateOutreachPlan, generateClosingStrategy, generateMasterStrategy, generateFilingChecklist, calculatePriorityScore } from './geminiService';
 
 const INITIAL_AGENTS: Agent[] = [
-  { id: 'SCOUTER', name: 'Scout-Net', description: 'Autonomous Public Record Extraction.', status: 'IDLE', color: '#6366f1' },
-  { id: 'TRACER', name: 'Shadow-Trace', description: 'Deep-Web Identity Correlation.', status: 'IDLE', color: '#a855f7' },
-  { id: 'OUTREACH', name: 'Echo-Sync', description: 'Automated Outreach Processor.', status: 'IDLE', color: '#f59e0b', isAutomated: true },
-  { id: 'LIEN', name: 'Title-Strike', description: 'Debt & Lien Subordination.', status: 'IDLE', color: '#06b6d4' },
-  { id: 'LEGAL', name: 'Lex-Analyst', description: 'Jurisdictional Logic Engine.', status: 'IDLE', color: '#ec4899' },
-  { id: 'FILER', name: 'Veri-File', description: 'Verification & Payout Monitoring.', status: 'IDLE', color: '#8b5cf6' },
-  { id: 'STRATEGIST', name: 'Core-AI', description: 'Strategic Recovery Orchestrator.', status: 'IDLE', color: '#10b981' },
+  { id: 'SCOUTER', name: 'Scout-Net', description: 'Public Record Sweep.', status: 'IDLE', color: '#6366f1' },
+  { id: 'TRACER', name: 'Shadow-Trace', description: 'Deep-Web Identity.', status: 'IDLE', color: '#a855f7' },
+  { id: 'OUTREACH', name: 'Echo-Sync', description: 'Automated Outreach.', status: 'IDLE', color: '#f59e0b', isAutomated: true },
+  { id: 'SURVEYOR', name: 'Surv-01', description: 'Geographic Intelligence.', status: 'IDLE', color: '#3b82f6' },
+  { id: 'ANALYST', name: 'Data-Forge', description: 'Financial Intelligence.', status: 'IDLE', color: '#10b981' },
+  { id: 'LEGAL', name: 'Lex-Analyst', description: 'Legal Logic Engine.', status: 'IDLE', color: '#ec4899' },
+  { id: 'FILER', name: 'Veri-File', description: 'Payout Monitoring.', status: 'IDLE', color: '#8b5cf6' },
+  { id: 'STRATEGIST', name: 'Core-AI', description: 'Swarm Strategist.', status: 'IDLE', color: '#ffffff' },
 ];
 
 const STAGE_ORDER: LeadStatus[] = ['DISCOVERED', 'TRACED', 'CONTACTED', 'LEGAL_REVIEW', 'FILED', 'PAID'];
@@ -26,6 +28,8 @@ const reviveLeads = (data: any[]): Lead[] => {
   if (!Array.isArray(data)) return [];
   return data.map(l => ({
     ...l,
+    documents: l.documents || [],
+    priorityScore: l.priorityScore || 0,
     crmHistory: (l.crmHistory || []).map((c: any) => ({ ...c, timestamp: new Date(c.timestamp) })),
     emailHistory: (l.emailHistory || []).map((e: any) => ({ ...e, timestamp: new Date(e.timestamp) })),
   }));
@@ -42,11 +46,11 @@ const App: React.FC = () => {
   });
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
-  const [view, setView] = useState<'OPERATIONS' | 'INTELLIGENCE' | 'AUDIT'>('OPERATIONS');
+  const [view, setView] = useState<ViewType>('OPERATIONS');
   
   const [discoveryQuota, setDiscoveryQuota] = useState(5);
   const [isAutoScouting, setIsAutoScouting] = useState(false);
-  const [locationHint, setLocationHint] = useState({ state: 'FL', county: 'Miami-Dade' });
+  const [locationHint] = useState({ state: 'FL', county: 'Miami-Dade' });
 
   const [isDeepThinking, setIsDeepThinking] = useState(false);
   const [thinkingResult, setThinkingResult] = useState<string | null>(null);
@@ -58,21 +62,12 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('sr_leads', JSON.stringify(leads)); }, [leads]);
   useEffect(() => { localStorage.setItem('sr_auth', isAuthenticated.toString()); }, [isAuthenticated]);
 
-  useEffect(() => {
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition((pos) => {
-        addLog('STRATEGIST', `GPS Lock: ${pos.coords.latitude.toFixed(2)}, ${pos.coords.longitude.toFixed(2)}. Dockets calibrated.`, 'INFO');
-      });
-    }
-  }, []);
-
   const selectedLead = useMemo(() => leads.find(l => l.id === selectedLeadId) || null, [leads, selectedLeadId]);
 
   const stats = useMemo(() => {
     const totalDiscovered = leads.reduce((sum, l) => sum + l.amount, 0);
-    const totalRecovered = leads.filter(l => l.status === 'PAID').reduce((sum, l) => sum + l.amount, 0);
     const activeFiles = leads.filter(l => l.status !== 'PAID').length;
-    return { totalDiscovered, totalRecovered, activeFiles };
+    return { totalDiscovered, activeFiles };
   }, [leads]);
 
   const addLog = (agentId: AgentRole, message: string, type: ActivityLog['type'] = 'INFO', leadId?: string) => {
@@ -114,7 +109,7 @@ const App: React.FC = () => {
         agentId: 'STRATEGIST',
         timestamp: new Date(),
         action: 'Stage Advanced',
-        details: `Moved from ${lead.status} to ${nextStatus}`
+        details: `Progressed to ${nextStatus}`
       }, ...lead.crmHistory]
     });
     addLog('STRATEGIST', `Advanced ${lead.ownerName} to ${nextStatus}`, 'SUCCESS', leadId);
@@ -125,29 +120,26 @@ const App: React.FC = () => {
     setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'WORKING' } : a));
     
     try {
-      addLog('SCOUTER', `Sweeping ${locationHint.county} dockets...`, 'INFO');
+      addLog('SCOUTER', `Scanning ${locationHint.county} public records...`, 'INFO');
       const result = await scoutSurplusFunds(locationHint.state, locationHint.county);
-      const leadData = await analyzeLead(`Extracting from search results...`);
+      const leadData = await analyzeLead(`Extracting details from: ${result.text.slice(0, 100)}`);
       
       const isDuplicate = leads.some(l => 
         l.ownerName.toLowerCase() === leadData.ownerName.toLowerCase() && 
-        Math.abs(l.amount - leadData.amount) < 50
+        Math.abs(l.amount - leadData.amount) < 100
       );
 
       if (isDuplicate) {
-        addLog('SCOUTER', `Redundant Object: ${leadData.ownerName}. Retrying...`, 'WARNING');
-        if (isAutoScouting) {
-           setTimeout(() => runDiscovery(false), 5000);
-        } else {
-           setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'IDLE' } : a));
-        }
+        addLog('SCOUTER', `Duplicate data found for ${leadData.ownerName}. Searching next record...`, 'WARNING');
+        if (isAutoScouting) setTimeout(() => runDiscovery(false), 3000);
+        else setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'IDLE' } : a));
         return;
       }
 
       const newLead: Lead = {
         id: Math.random().toString(36).substring(7).toUpperCase(),
-        ownerName: leadData.ownerName || 'UNIDENTIFIED SUBJECT',
-        amount: leadData.amount,
+        ownerName: leadData.ownerName || 'PENDING IDENT',
+        amount: leadData.amount || 0,
         lastKnownAddress: leadData.lastKnownAddress || '',
         propertyAddress: leadData.propertyAddress || '',
         county: locationHint.county.toUpperCase(),
@@ -158,12 +150,21 @@ const App: React.FC = () => {
         status: 'DISCOVERED',
         sourceUrl: result.sources[0]?.uri || '',
         notes: [],
-        crmHistory: [{ id: '1', agentId: 'SCOUTER', timestamp: new Date(), action: 'Discovery', details: 'Target identified.' }],
-        emailHistory: []
+        crmHistory: [{ id: '1', agentId: 'SCOUTER', timestamp: new Date(), action: 'Discovery', details: 'Record identified.' }],
+        emailHistory: [],
+        documents: [],
+        priorityScore: 0,
+        // Mock some coordinates for the tactical map
+        latLng: { 
+          lat: 25.7617 + (Math.random() - 0.5) * 0.1, 
+          lng: -80.1918 + (Math.random() - 0.5) * 0.1 
+        }
       };
 
+      newLead.priorityScore = await calculatePriorityScore(newLead);
+
       setLeads(prev => [newLead, ...prev]);
-      addLog('SCOUTER', `Object identified: $${newLead.amount.toLocaleString()}`, 'SUCCESS', newLead.id);
+      addLog('SCOUTER', `Success: $${newLead.amount.toLocaleString()} Recovery Identified. Priority: ${newLead.priorityScore}%`, 'SUCCESS', newLead.id);
       
       if (isAutoScouting && leads.length + 1 < discoveryQuota) {
         setTimeout(() => runDiscovery(false), 4000);
@@ -183,79 +184,81 @@ const App: React.FC = () => {
     if (newState) runDiscovery(false);
   };
 
+  /**
+   * Orchestrate master blueprint generation for a target lead.
+   */
+  const runMasterStrategy = async (lead: Lead) => {
+    setIsDeepThinking(true);
+    try {
+      const res = await generateMasterStrategy(lead);
+      setMasterResult(res);
+    } catch (err) {
+      console.error("Master Strategy Orchestration Error:", err);
+    } finally {
+      setIsDeepThinking(false);
+    }
+  };
+
+  /**
+   * Execute deep skip tracing intel retrieval.
+   */
   const runDeepTrace = async (lead: Lead) => {
     setIsDeepThinking(true);
-    setAgents(prev => prev.map(a => a.id === 'TRACER' ? { ...a, status: 'WORKING' } : a));
     try {
-      const result = await optimizeSkipTracingStrategy([], lead);
-      setThinkingResult(result);
-      setAgents(prev => prev.map(a => a.id === 'TRACER' ? { ...a, status: 'SUCCESS' } : a));
-    } catch {
-      setAgents(prev => prev.map(a => a.id === 'TRACER' ? { ...a, status: 'ERROR' } : a));
-    } finally { setIsDeepThinking(false); }
+      // Using an empty array for PlaybookEntry as history isn't currently tracked in the simple state
+      const res = await optimizeSkipTracingStrategy([], lead);
+      setThinkingResult(res);
+    } catch (err) {
+      console.error("Deep Trace Execution Error:", err);
+    } finally {
+      setIsDeepThinking(false);
+    }
   };
 
+  /**
+   * Generate highly personalized outreach sequences.
+   */
   const runOutreachGeneration = async (lead: Lead) => {
-    setAgents(prev => prev.map(a => a.id === 'OUTREACH' ? { ...a, status: 'WORKING' } : a));
+    setIsDeepThinking(true);
     try {
-      const result = await generateOutreachPlan(lead);
-      setOutreachResult(result);
-      setAgents(prev => prev.map(a => a.id === 'OUTREACH' ? { ...a, status: 'SUCCESS' } : a));
-    } catch {
-      setAgents(prev => prev.map(a => a.id === 'OUTREACH' ? { ...a, status: 'ERROR' } : a));
+      const res = await generateOutreachPlan(lead);
+      setOutreachResult(res);
+    } catch (err) {
+      console.error("Outreach Generation Error:", err);
+    } finally {
+      setIsDeepThinking(false);
     }
   };
 
+  /**
+   * Synthesize legal closing strategies and potential objections.
+   */
   const runClosingStrategy = async (lead: Lead) => {
-    setAgents(prev => prev.map(a => a.id === 'LEGAL' ? { ...a, status: 'WORKING' } : a));
+    setIsDeepThinking(true);
     try {
-      const result = await generateClosingStrategy(lead);
-      setClosingResult(result);
-      setAgents(prev => prev.map(a => a.id === 'LEGAL' ? { ...a, status: 'SUCCESS' } : a));
-    } catch {
-      setAgents(prev => prev.map(a => a.id === 'LEGAL' ? { ...a, status: 'ERROR' } : a));
+      const res = await generateClosingStrategy(lead);
+      setClosingResult(res);
+    } catch (err) {
+      console.error("Closing Strategy Error:", err);
+    } finally {
+      setIsDeepThinking(false);
     }
   };
 
+  /**
+   * Compile mandatory filing requirements for payout processing.
+   */
   const runFilingChecklist = async (lead: Lead) => {
-    setAgents(prev => prev.map(a => a.id === 'FILER' ? { ...a, status: 'WORKING' } : a));
+    setIsDeepThinking(true);
     try {
-      const result = await generateFilingChecklist(lead);
-      setFilerResult(result);
-      setAgents(prev => prev.map(a => a.id === 'FILER' ? { ...a, status: 'SUCCESS' } : a));
-    } catch {
-      setAgents(prev => prev.map(a => a.id === 'FILER' ? { ...a, status: 'ERROR' } : a));
+      const res = await generateFilingChecklist(lead);
+      setFilerResult(res);
+    } catch (err) {
+      console.error("Filing Checklist Generation Error:", err);
+    } finally {
+      setIsDeepThinking(false);
     }
   };
-
-  const runMasterStrategy = async (lead: Lead) => {
-    setAgents(prev => prev.map(a => a.id === 'STRATEGIST' ? { ...a, status: 'WORKING' } : a));
-    try {
-      const result = await generateMasterStrategy(lead);
-      setMasterResult(result);
-      setAgents(prev => prev.map(a => a.id === 'STRATEGIST' ? { ...a, status: 'SUCCESS' } : a));
-    } catch {
-      setAgents(prev => prev.map(a => a.id === 'STRATEGIST' ? { ...a, status: 'ERROR' } : a));
-    }
-  };
-
-  if (!isAuthenticated) {
-    return (
-      <div className="h-screen bg-black flex items-center justify-center p-6 relative">
-        <div className="absolute inset-0 bg-indigo-500/5 blur-[120px] rounded-full scale-50" />
-        <div className="w-full max-w-sm p-12 bg-[#0c0c0e] rounded-[32px] border border-white/5 shadow-2xl relative">
-          <div className="flex flex-col items-center mb-12 text-center">
-            <div className="w-16 h-16 bg-white rounded-[20px] mb-8 flex items-center justify-center shadow-xl shadow-white/5">
-              <div className="w-8 h-8 bg-black rounded-lg" />
-            </div>
-            <h1 className="text-2xl font-extrabold tracking-tight">Recovery Console</h1>
-            <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.4em] mt-3 leading-relaxed">Identity Authentication Required</p>
-          </div>
-          <button onClick={() => setIsAuthenticated(true)} className="w-full bg-indigo-600 text-white font-bold py-5 rounded-2xl text-sm transition-all hover:bg-indigo-500 active:scale-[0.98]">Initialize Linkage</button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="h-screen flex overflow-hidden bg-black selection:bg-indigo-500/30">
@@ -269,15 +272,15 @@ const App: React.FC = () => {
           </div>
           <nav className="space-y-1">
             <button onClick={() => setView('OPERATIONS')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${view === 'OPERATIONS' ? 'bg-white/5 text-indigo-400' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
               Operations Deck
             </button>
+            <button onClick={() => setView('TACTICAL_MAP')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${view === 'TACTICAL_MAP' ? 'bg-white/5 text-indigo-400' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
+              Tactical Map
+            </button>
             <button onClick={() => setView('INTELLIGENCE')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${view === 'INTELLIGENCE' ? 'bg-white/5 text-indigo-400' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
               Intelligence Hub
             </button>
             <button onClick={() => setView('AUDIT')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${view === 'AUDIT' ? 'bg-white/5 text-indigo-400' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
               Audit Stream
             </button>
           </nav>
@@ -309,8 +312,8 @@ const App: React.FC = () => {
                {[...Array(2)].map((_, i) => (
                   <div key={i} className="flex gap-12 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600 mono">
                     <span>SYSTEM STATUS: <span className="text-emerald-500">OPTIMAL</span></span>
-                    <span>DETECTED SURPLUS: <span className="text-indigo-400">${stats.totalDiscovered.toLocaleString()}</span></span>
-                    <span>ACTIVE AGENTS: <span className="text-white">{agents.filter(a => a.status === 'WORKING').length} WORKING</span></span>
+                    <span>PIPELINE VALUE: <span className="text-indigo-400">${stats.totalDiscovered.toLocaleString()}</span></span>
+                    <span>ACTIVE TARGETS: <span className="text-white">{stats.activeFiles}</span></span>
                   </div>
                ))}
             </div>
@@ -342,20 +345,20 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-hidden relative">
            {view === 'OPERATIONS' ? (
              <LeadTable leads={leads} onSelectLead={handleSelectLead} onAdvanceLead={advanceLead} />
+           ) : view === 'TACTICAL_MAP' ? (
+             <TacticalMap leads={leads} onSelectLead={handleSelectLead} />
            ) : view === 'AUDIT' ? (
              <div className="p-10 h-full"><Terminal logs={logs} /></div>
            ) : (
-             <IntelligenceHub selectedLead={selectedLead} />
+             <IntelligenceHub selectedLead={selectedLead} leads={leads} />
            )}
         </div>
 
-        {/* ChatBot shifts left when dossier is open */}
         <div className={`fixed bottom-10 z-[60] w-[400px] transition-all duration-500 ease-in-out ${selectedLead ? 'right-[640px]' : 'right-10'}`}>
            <ChatBot />
         </div>
       </main>
 
-      {/* Dossier Sidebar with enhanced depth */}
       <div className={`dossier-panel fixed top-0 right-0 h-full w-[600px] bg-[#0c0c0e] border-l border-zinc z-50 flex flex-col shadow-[-40px_0_80px_rgba(0,0,0,0.8)] ${selectedLead ? 'translate-x-0' : 'translate-x-full'}`}>
         {selectedLead && (
           <LeadDossier 
@@ -373,6 +376,7 @@ const App: React.FC = () => {
             closingResult={closingResult}
             filerResult={filerResult}
             isDeepThinking={isDeepThinking}
+            updateLead={updateLead}
           />
         )}
       </div>

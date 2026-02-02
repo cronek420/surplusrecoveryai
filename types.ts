@@ -1,11 +1,12 @@
 
-export type AgentRole = 'SCOUTER' | 'TRACER' | 'OUTREACH' | 'LEGAL' | 'STRATEGIST' | 'LIEN' | 'FILER';
+export type AgentRole = 'SCOUTER' | 'TRACER' | 'OUTREACH' | 'LEGAL' | 'STRATEGIST' | 'LIEN' | 'FILER' | 'ANALYST' | 'SURVEYOR';
 
 export type LeadStatus = 'DISCOVERED' | 'TRACED' | 'CONTACTED' | 'LEGAL_REVIEW' | 'FILED' | 'PAID';
 
 export type VerificationStatus = 'YES' | 'NO' | 'PENDING';
 
-/* Define the Agent interface used across the CRM components */
+export type ViewType = 'OPERATIONS' | 'INTELLIGENCE' | 'AUDIT' | 'TACTICAL_MAP';
+
 export interface Agent {
   id: AgentRole;
   name: string;
@@ -14,6 +15,15 @@ export interface Agent {
   color: string;
   isAutomated?: boolean;
   lastAction?: string;
+}
+
+export interface LeadDocument {
+  id: string;
+  name: string;
+  type: string;
+  timestamp: Date;
+  status: 'PARSED' | 'PENDING';
+  data?: any;
 }
 
 export interface SocialMedia {
@@ -26,7 +36,7 @@ export interface SocialMedia {
 export interface PlaybookEntry {
   id: string;
   method: string;
-  efficiency: number; // 0-100
+  efficiency: number; 
   reasoning: string;
   timestamp: Date;
 }
@@ -59,8 +69,6 @@ export interface Lead {
   county: string;
   state: string;
   courtCounty: string;
-  dateFiled?: string;
-  dateContacted?: string;
   verified: VerificationStatus;
   socials: SocialMedia;
   amount: number;
@@ -69,13 +77,10 @@ export interface Lead {
   notes: string[];
   crmHistory: CRMActivity[];
   emailHistory: EmailMessage[];
-  wasSuccessful?: boolean;
-  // Attorney Details
-  attorneyName?: string;
-  attorneyFirm?: string;
-  attorneyEmail?: string;
-  attorneyPhone?: string;
-  attorneyNotes?: string;
+  documents: LeadDocument[];
+  priorityScore?: number; // 0-100
+  caseNumber?: string;
+  latLng?: { lat: number; lng: number };
 }
 
 export interface ActivityLog {

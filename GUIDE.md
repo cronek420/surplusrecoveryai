@@ -1,3 +1,4 @@
+
 # 🛰️ SR-AI | Surplus Recovery Swarm: Technical Overview
 
 This application is an **Enterprise-Grade Agentic Recovery Ecosystem** designed to transform the complex, labor-intensive process of surplus funds recovery into a high-speed, automated production line. 
@@ -33,14 +34,15 @@ When a lead is selected, the system opens a 360-degree combat view of the recove
 - **Correspondence Stream:** A full audit trail of every email and SMS sent by the swarm.
 - **On-Demand Strategy:** Trigger "Deep Thinking" sessions to solve "stuck" leads, allowing the AI to spend up to 32,000 tokens purely on reasoning.
 
-### B. The Swarm Intelligence Hub
-The "CEO View" visualizes the **Pipeline Linkage**. It shows exactly which "Phase" of recovery a lead is in and generates a **Strategic Master Blueprint** predicting the next 90 days of the recovery lifecycle.
+---
 
-### C. Live Audio Strategist
-Features a **Low-Latency Native Audio Session**. Users can talk directly to the **Core-AI Strategist** for human-like, professional briefing in milliseconds via raw PCM audio streaming.
+## 4. Advanced Tactical Visualization & Property Recon
+This fourth layer of intelligence transforms recovery from a spreadsheet task into a spatial operation.
 
-### D. Search Grounding & Truth Verification
-System is "grounded" in reality. Every discovery made by Scout-Net includes **Grounding Metadata URLs**, providing direct links to court records or surplus lists for 100% auditability.
+- **📍 Tactical Map (Bounty Grid):** Visualizes the geographical clustering of surplus capital. This allows for "Batch Filing" in specific courthouses, drastically reducing administrative overhead.
+- **🗺️ Surv-01 (Property Recon Agent):** Powered by Google Maps grounding, this agent performs virtual property inspections. It determines neighborhood occupancy, proximity to local amenities, and courthouse logistics.
+- **🏠 Visual Intelligence:** The agent uses spatial reasoning to determine if a claimant might be reachable at the property address or if a secondary skip-trace for a relocation address is higher priority.
+- **🚀 Jurisdictional Logistics:** Automatically identifies the nearest courthouse and filing clerk for the property, ensuring the "Lex-Analyst" agent uses the correct jurisdictional forms.
 
 ---
 

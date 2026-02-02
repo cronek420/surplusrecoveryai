@@ -5,37 +5,95 @@ import { AgentRole, Lead, PlaybookEntry } from "./types";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
- * NEW: Swarm Orchestration Architect – Multi-Agent Workflow Blueprint
+ * Property Recon: Uses Maps Grounding to find property intelligence
  */
-export const generateOrchestrationMap = async (lead?: Lead) => {
-  const targetLeadInfo = lead 
-    ? `targeting ${lead.ownerName} ($${lead.amount}) in ${lead.county}, ${lead.state}` 
-    : "for a global high-performance recovery system";
+export const getPropertyInsights = async (address: string, lat?: number, lng?: number) => {
+  const prompt = `Analyze this property address: ${address}. Provide: 1. Neighborhood demographic vibe, 2. Proximity to local courthouse, 3. Estimated property value range based on nearby sales. Ground your answer in Google Maps data.`;
+  
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
+    config: {
+      tools: [{ googleMaps: {} }],
+      toolConfig: {
+        retrievalConfig: {
+          latLng: lat && lng ? { latitude: lat, longitude: lng } : undefined
+        }
+      }
+    },
+  });
 
-  const prompt = `Elite Swarm Orchestration Map – Prompt for Swarm Orchestration Architect
+  return {
+    text: response.text,
+    sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => chunk.maps) || []
+  };
+};
 
-Role:
-You are the Swarm Orchestration Architect. You must design a complete multi-agent workflow ${targetLeadInfo}. Coordinate Scout-Net, Shadow-Trace, Echo-Sync, Lex-Analyst, and Veri-File.
+/**
+ * OCR & Document Intelligence: Parses images of dockets or surplus lists
+ * Correcting model for multimodal analysis (OCR) from generation model to flash model.
+ */
+export const analyzeDocumentImage = async (base64Image: string, mimeType: string) => {
+  const prompt = "Act as a Court Clerk Specialist. Analyze this document image and extract: 1. Case Number, 2. Exact Surplus Amount, 3. Property Address, 4. Any Lienholders mentioned. Format as clean JSON.";
+  
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: {
+      parts: [
+        { inlineData: { data: base64Image, mimeType } },
+        { text: prompt }
+      ]
+    },
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          caseNumber: { type: Type.STRING },
+          amount: { type: Type.NUMBER },
+          address: { type: Type.STRING },
+          liens: { type: Type.ARRAY, items: { type: Type.STRING } },
+          confidence: { type: Type.NUMBER }
+        },
+        required: ["caseNumber", "amount", "address"]
+      }
+    }
+  });
 
-🎯 Objective:
-Create a detailed Swarm Orchestration Map in markdown including:
-1. Agent Flow Table: Mapping triggers, inputs, outputs, and next-agent handoffs.
-2. Workflow Logic & Branches: Fallback conditions (unreachable leads, court rejections).
-3. Shared Lead Data Schema: A JSON structure all agents read/write to.
-4. Agent Activation Conditions: Deterministic rules for moving a lead to the next stage.
-5. Error Handling & Escalation: Smart retry logic and human-checkpoints.
+  return JSON.parse(response.text || '{}');
+};
 
-Output Format:
-# Swarm Orchestration Map – Surplus Funds Recovery
-## 🔁 Agent Flow Overview
-(Markdown Table)
-## 🧠 Workflow Logic & Branches
-## 🗃 Shared Lead Schema
-## 🔄 Agent Activation Conditions
-## 🚨 Error Handling & Escalation`;
+/**
+ * Lead prioritizing logic with schema enforcement.
+ */
+export const calculatePriorityScore = async (lead: Lead) => {
+  const prompt = `Rank this recovery lead from 0-100 based on 'Ease of Recovery' vs 'Amount'. 
+  Lead: ${lead.ownerName}, Amount: $${lead.amount}, Status: ${lead.status}, Location: ${lead.county}, ${lead.state}.
+  Return only an integer.`;
 
   const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
+    model: "gemini-3-flash-preview",
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: { score: { type: Type.INTEGER } },
+        required: ["score"]
+      }
+    }
+  });
+  return JSON.parse(response.text || '{"score":0}').score;
+};
+
+/**
+ * Swarm orchestration strategy with deep reasoning.
+ */
+export const generateOrchestrationMap = async (lead?: Lead) => {
+  const prompt = `Elite Swarm Orchestration Map. Coordinate Scout-Net, Shadow-Trace, Echo-Sync, Lex-Analyst, and Veri-File. Focus on $ value optimization.`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-pro-preview',
     contents: prompt,
     config: {
       thinkingConfig: { thinkingBudget: 32768 }
@@ -46,27 +104,25 @@ Output Format:
 };
 
 /**
- * Deep Thinking Mode for Skip Tracing
+ * Advanced skip tracing logic using pro reasoning.
  */
 export const optimizeSkipTracingStrategy = async (pastSuccesses: PlaybookEntry[], targetLead: Lead) => {
-  const prompt = `Elite Skip Tracing Strategy – Prompt for Shadow-Trace Agent. 
-  Mission: Locate and verify ${targetLead.ownerName} for $${targetLead.amount} recovery in ${targetLead.county}.
-  Requirements: Databases, Tactical Steps, Verification sequence.`;
-
+  const prompt = `Elite Skip Tracing Strategy for ${targetLead.ownerName} ($${targetLead.amount}).`;
   const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
+    model: 'gemini-3-pro-preview',
     contents: prompt,
     config: { thinkingConfig: { thinkingBudget: 32768 } }
   });
   return response.text;
 };
 
+/**
+ * High-precision surplus discovery with Search Grounding.
+ */
 export const scoutSurplusFunds = async (state: string, county: string) => {
-  const model = "gemini-3-flash-preview";
-  const prompt = `MISSION: High-precision discovery of unclaimed surplus foreclosure funds in ${county}, ${state}. Identify leads over $40k.`;
   const response = await ai.models.generateContent({
-    model,
-    contents: prompt,
+    model: "gemini-3-flash-preview",
+    contents: `MISSION: High-precision discovery of unclaimed surplus funds in ${county}, ${state}.`,
     config: { tools: [{ googleSearch: {} }] },
   });
   return {
@@ -75,10 +131,13 @@ export const scoutSurplusFunds = async (state: string, county: string) => {
   };
 };
 
+/**
+ * Multimodal extraction of lead data from unstructured input.
+ */
 export const analyzeLead = async (leadInfo: string) => {
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Parse this raw surplus fund data into a detailed JSON lead object: ${leadInfo}`,
+    contents: `Parse surplus fund data: ${leadInfo}`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -96,63 +155,60 @@ export const analyzeLead = async (leadInfo: string) => {
       }
     }
   });
-  return JSON.parse(response.text);
+  return JSON.parse(response.text || '{}');
 };
 
+/**
+ * Outreach sequence generation with pro reasoning.
+ */
 export const generateOutreachPlan = async (lead: Lead) => {
-  const prompt = `Elite Multi-Channel Outreach – Echo-Sync Agent. Target: ${lead.ownerName} ($${lead.amount}). 3-touch sequence plan.`;
   const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: prompt,
-    config: { thinkingConfig: { thinkingBudget: 24000 } }
+    model: 'gemini-3-pro-preview',
+    contents: `Outreach plan for ${lead.ownerName}.`,
+    config: { thinkingConfig: { thinkingBudget: 32768 } }
   });
   return response.text;
 };
 
+/**
+ * Legal closing strategy with pro reasoning.
+ */
 export const generateClosingStrategy = async (lead: Lead) => {
-  const prompt = `Elite Lex-Analyst Prompt – Legal Recovery & Jurisdictional Logic. 
-  Target: ${lead.ownerName} ($${lead.amount}). 
-  Roadmap: Vetting, Standing, Document Package, Reassurance Script.`;
   const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: prompt,
+    model: 'gemini-3-pro-preview',
+    contents: `Legal strategy for ${lead.ownerName}.`,
     config: { thinkingConfig: { thinkingBudget: 32768 } }
   });
   return response.text;
 };
 
+/**
+ * Watchdog filing checklist with pro reasoning.
+ */
 export const generateFilingChecklist = async (lead: Lead) => {
-  const prompt = `Elite Veri-File Prompt – Verification & Disbursement Watchdog. 
-  Target: ${lead.ownerName} ($${lead.amount}). 
-  Last Mile: Docket Monitoring, Clerk Protocol, Final Payout, Referral Loop.`;
   const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: prompt,
+    model: 'gemini-3-pro-preview',
+    contents: `Filing watchdog checklist for ${lead.ownerName}.`,
     config: { thinkingConfig: { thinkingBudget: 32768 } }
   });
   return response.text;
 };
 
+/**
+ * Master blueprint generation with pro reasoning.
+ */
 export const generateMasterStrategy = async (lead: Lead) => {
-  const prompt = `Elite Master Recovery Blueprint – Core-AI Orchestrator. Lead: ${lead.ownerName} ($${lead.amount}). Timeline, Risk, Allocation, Outcome.`;
   const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: prompt,
+    model: 'gemini-3-pro-preview',
+    contents: `Master blueprint for ${lead.ownerName}.`,
     config: { thinkingConfig: { thinkingBudget: 32768 } }
   });
   return response.text;
 };
 
-export const generateLienStrategy = async (lead: Lead) => {
-  const prompt = `Elite Lien-Strike Strategy – Title-Strike Agent. Subordinate competing claims for ${lead.ownerName}.`;
-  const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: prompt,
-    config: { thinkingConfig: { thinkingBudget: 32768 } }
-  });
-  return response.text;
-};
-
+/**
+ * Voice synthesis for agent communication.
+ */
 export const speakResponse = async (text: string) => {
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",

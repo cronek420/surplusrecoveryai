@@ -1,37 +1,52 @@
 
-# 🚀 SR-AI | Surplus Recovery Workhorse - Local Deployment
+# 🛰️ SR-AI | Surplus Recovery Swarm - Local Installation
 
-This application is a professional agentic swarm for surplus funds recovery. To run it independently on your machine, follow the launch protocol below.
+This "Workhorse" build is designed for high-speed local execution. Follow these steps to deploy the agentic swarm on your machine.
 
-## 🛠️ Launch Protocol
+## 🛠️ Step-by-Step Launch
 
-### 1. Environment Preparation
-Ensure you have **Node.js** (v18+) installed. Clone or copy all files into a directory on your machine.
+### 1. Create your Project Folder
+Create a folder anywhere on your computer, e.g., `Documents/recovery-swarm`.
 
-### 2. Dependency Installation
-Open your terminal in the project directory and run:
+### 2. Save the Code
+Create the following files in that folder and paste the corresponding code from our session:
+- `package.json`
+- `vite.config.ts`
+- `types.ts`
+- `geminiService.ts`
+- `App.tsx`
+- `index.tsx`
+- `index.html`
+- `metadata.json`
+- `.env` (Create this file and add: `API_KEY=your_gemini_key`)
+- Create a `components` folder and add:
+  - `AgentCard.tsx`
+  - `LeadTable.tsx`
+  - `Terminal.tsx`
+  - `ChatBot.tsx`
+  - `IntelligenceHub.tsx`
+  - `LeadDossier.tsx`
+  - `LiveAudioController.tsx`
+  - `TacticalMap.tsx`
+
+### 3. Initialize via Command Line
+Open your terminal/command prompt:
 ```bash
+# Navigate to the folder
+cd path/to/your/recovery-swarm
+
+# Install the engine components
 npm install
-```
 
-### 3. API Key Configuration
-Create a file named `.env` in the root directory (or rename `.env.example`) and add your Gemini API Key:
-```env
-API_KEY=your_actual_api_key_here
-```
-
-### 4. Ignite Swarm
-Start the local development server:
-```bash
+# Ignite the swarm
 npm run dev
 ```
-The application will automatically open at `http://localhost:3000`.
 
-## 📁 Intelligence Modules
-- **Operations Deck**: Real-time lead management and agent deployment.
-- **Tactical Map**: Geographic clustering of surplus capital.
-- **Intelligence Hub**: Global funnel analytics and neural orchestration.
-- **Live Strategist**: Voice-activated real-time recovery advisor.
+### 4. Access the Command Deck
+The terminal will provide a link (usually `http://localhost:3000`). Open it in your browser to begin recovery operations.
 
-## ⚖️ Legal Disclaimer
-This software is an automation tool. Users are responsible for ensuring compliance with all jurisdictional statutes regarding surplus recovery, debt collection, and solicitation.
+## ⚡ Intelligence Overview
+- **Scout-Net**: Real-time public record discovery.
+- **Shadow-Trace**: Deep-thinking skip tracing logic.
+- **Surv-01**: Geographic and property recon via Google Maps.
+- **Live Strategist**: Real-time voice consultation for high-stakes decisions.

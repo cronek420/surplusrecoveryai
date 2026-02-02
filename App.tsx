@@ -134,10 +134,15 @@ const App: React.FC = () => {
     try {
       addLog('SCOUTER', `Scanning ${locationHint.county} public records...`, 'INFO');
       const result = await scoutSurplusFunds(locationHint.state, locationHint.county);
-      const leadData = await analyzeLead(`Extracting details from: ${result.text.slice(0, 100)}`);
+      
+      if (!result.text || result.text.length < 10) {
+        throw new Error("EMPTY_RESULT: No meaningful data returned from search grounding.");
+      }
+
+      const leadData = await analyzeLead(`Extracting details from: ${result.text.slice(0, 300)}`);
       
       const isDuplicate = leads.some(l => 
-        l.ownerName.toLowerCase() === leadData.ownerName.toLowerCase() && 
+        l.ownerName.toLowerCase() === leadData.ownerName?.toLowerCase() && 
         Math.abs(l.amount - leadData.amount) < 100
       );
 
@@ -183,7 +188,9 @@ const App: React.FC = () => {
         setIsAutoScouting(false);
         setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'SUCCESS' } : a));
       }
-    } catch (e) {
+    } catch (e: any) {
+      const errorMsg = e.message || "Unknown error during scout";
+      addLog('SCOUTER', `Protocol Breach: ${errorMsg}`, 'ERROR');
       setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'ERROR' } : a));
       setIsAutoScouting(false);
     }
@@ -277,7 +284,7 @@ const App: React.FC = () => {
     return (
       <div className="h-screen bg-black flex items-center justify-center p-6 relative">
         <div className="absolute inset-0 bg-indigo-500/5 blur-[120px] rounded-full scale-50" />
-        <div className="w-full max-w-sm p-12 bg-[#0c0c0e] rounded-[32px] border border-white/5 shadow-2xl relative">
+        <div className="w-full max-sm p-12 bg-[#0c0c0e] rounded-[32px] border border-white/5 shadow-2xl relative">
           <div className="flex flex-col items-center mb-12 text-center">
             <div className="w-16 h-16 bg-white rounded-[20px] mb-8 flex items-center justify-center shadow-xl shadow-white/5">
               <div className="w-8 h-8 bg-black rounded-lg" />

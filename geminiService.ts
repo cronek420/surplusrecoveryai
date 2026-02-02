@@ -2,16 +2,23 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { AgentRole, Lead, PlaybookEntry } from "./types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Helper to get fresh AI instance
+const getAI = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey === "your_gemini_api_key_here") {
+    throw new Error("MISSING_API_KEY: Please set your API_KEY in the .env file and restart the server.");
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 /**
  * Property Recon: Uses Maps Grounding to find property intelligence
  */
 export const getPropertyInsights = async (address: string, lat?: number, lng?: number) => {
+  const ai = getAI();
   const prompt = `Analyze this property address: ${address}. Provide: 1. Neighborhood demographic vibe, 2. Proximity to local courthouse, 3. Estimated property value range based on nearby sales. Ground your answer in Google Maps data.`;
   
   const response = await ai.models.generateContent({
-    // Gemini 2.5 series is required for Maps Grounding.
     model: "gemini-2.5-flash",
     contents: prompt,
     config: {
@@ -26,7 +33,6 @@ export const getPropertyInsights = async (address: string, lat?: number, lng?: n
 
   const text = response.text || '';
   const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-  // Extracting URLs from groundingChunks as required by guidelines
   const links = chunks
     .filter((chunk: any) => chunk.maps)
     .map((chunk: any) => `\n- [${chunk.maps.title || 'Source'}](${chunk.maps.uri})`)
@@ -39,10 +45,10 @@ export const getPropertyInsights = async (address: string, lat?: number, lng?: n
 };
 
 /**
- * OCR & Document Intelligence: Parses images of dockets or surplus lists
- * Correcting model for multimodal analysis (OCR) from generation model to flash model.
+ * OCR & Document Intelligence
  */
 export const analyzeDocumentImage = async (base64Image: string, mimeType: string) => {
+  const ai = getAI();
   const prompt = "Act as a Court Clerk Specialist. Analyze this document image and extract: 1. Case Number, 2. Exact Surplus Amount, 3. Property Address, 4. Any Lienholders mentioned. Format as clean JSON.";
   
   const response = await ai.models.generateContent({
@@ -73,9 +79,10 @@ export const analyzeDocumentImage = async (base64Image: string, mimeType: string
 };
 
 /**
- * Lead prioritizing logic with schema enforcement.
+ * Lead prioritizing logic
  */
 export const calculatePriorityScore = async (lead: Lead) => {
+  const ai = getAI();
   const prompt = `Rank this recovery lead from 0-100 based on 'Ease of Recovery' vs 'Amount'. 
   Lead: ${lead.ownerName}, Amount: $${lead.amount}, Status: ${lead.status}, Location: ${lead.county}, ${lead.state}.
   Return only an integer.`;
@@ -96,9 +103,10 @@ export const calculatePriorityScore = async (lead: Lead) => {
 };
 
 /**
- * Swarm orchestration strategy with deep reasoning.
+ * Swarm orchestration strategy
  */
 export const generateOrchestrationMap = async (lead?: Lead) => {
+  const ai = getAI();
   const prompt = `Elite Swarm Orchestration Map. Coordinate Scout-Net, Shadow-Trace, Echo-Sync, Lex-Analyst, and Veri-File. Focus on $ value optimization.`;
 
   const response = await ai.models.generateContent({
@@ -113,9 +121,10 @@ export const generateOrchestrationMap = async (lead?: Lead) => {
 };
 
 /**
- * Advanced skip tracing logic using pro reasoning.
+ * Advanced skip tracing logic
  */
 export const optimizeSkipTracingStrategy = async (pastSuccesses: PlaybookEntry[], targetLead: Lead) => {
+  const ai = getAI();
   const prompt = `Elite Skip Tracing Strategy for ${targetLead.ownerName} ($${targetLead.amount}).`;
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
@@ -126,18 +135,18 @@ export const optimizeSkipTracingStrategy = async (pastSuccesses: PlaybookEntry[]
 };
 
 /**
- * High-precision surplus discovery with Search Grounding.
+ * High-precision surplus discovery with Search Grounding
  */
 export const scoutSurplusFunds = async (state: string, county: string) => {
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `MISSION: High-precision discovery of unclaimed surplus funds in ${county}, ${state}.`,
+    contents: `MISSION: High-precision discovery of unclaimed surplus funds in ${county}, ${state}. Provide a few potential leads with estimated amounts.`,
     config: { tools: [{ googleSearch: {} }] },
   });
 
   const text = response.text || '';
   const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-  // Extract website URLs from groundingChunks as required by guidelines
   const links = chunks
     .filter((chunk: any) => chunk.web)
     .map((chunk: any) => `\n- [${chunk.web.title || 'Source'}](${chunk.web.uri})`)
@@ -150,9 +159,10 @@ export const scoutSurplusFunds = async (state: string, county: string) => {
 };
 
 /**
- * Multimodal extraction of lead data from unstructured input.
+ * Multimodal extraction of lead data
  */
 export const analyzeLead = async (leadInfo: string) => {
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `Parse surplus fund data: ${leadInfo}`,
@@ -176,10 +186,8 @@ export const analyzeLead = async (leadInfo: string) => {
   return JSON.parse(response.text || '{}');
 };
 
-/**
- * Outreach sequence generation with pro reasoning.
- */
 export const generateOutreachPlan = async (lead: Lead) => {
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: `Outreach plan for ${lead.ownerName}.`,
@@ -188,10 +196,8 @@ export const generateOutreachPlan = async (lead: Lead) => {
   return response.text;
 };
 
-/**
- * Legal closing strategy with pro reasoning.
- */
 export const generateClosingStrategy = async (lead: Lead) => {
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: `Legal strategy for ${lead.ownerName}.`,
@@ -200,10 +206,8 @@ export const generateClosingStrategy = async (lead: Lead) => {
   return response.text;
 };
 
-/**
- * Watchdog filing checklist with pro reasoning.
- */
 export const generateFilingChecklist = async (lead: Lead) => {
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: `Filing watchdog checklist for ${lead.ownerName}.`,
@@ -212,10 +216,8 @@ export const generateFilingChecklist = async (lead: Lead) => {
   return response.text;
 };
 
-/**
- * Master blueprint generation with pro reasoning.
- */
 export const generateMasterStrategy = async (lead: Lead) => {
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: `Master blueprint for ${lead.ownerName}.`,
@@ -224,10 +226,8 @@ export const generateMasterStrategy = async (lead: Lead) => {
   return response.text;
 };
 
-/**
- * Voice synthesis for agent communication.
- */
 export const speakResponse = async (text: string) => {
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
     contents: [{ parts: [{ text }] }],

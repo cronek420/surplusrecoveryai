@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Agent, Lead, ActivityLog, AgentRole, LeadStatus, ViewType } from './types';
 import AgentCard from './components/AgentCard';

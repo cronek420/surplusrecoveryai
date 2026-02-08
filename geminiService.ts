@@ -37,6 +37,30 @@ const getAI = () => {
   return new GoogleGenAI({ apiKey });
 };
 
+/**
+ * AIRSCALE INTEGRATION - Property Data & Real Estate Intelligence
+ * Provides comprehensive property profiles, ownership history, and valuation
+ */
+const getAirscaleKey = () => {
+  const key = (process.env.AIRSCALE_API_KEY || "").trim();
+  if (!key) {
+    console.warn("[LEXICON] AIRSCALE_API_KEY not configured. Property intelligence degraded.");
+  }
+  return key;
+};
+
+/**
+ * ANYMAILFINDER INTEGRATION - Email Discovery & Verification
+ * Locates professional email addresses and verifies deliverability
+ */
+const getAnymailfinderKey = () => {
+  const key = (process.env.ANYMAILFINDER_API_KEY || "").trim();
+  if (!key) {
+    console.warn("[LEXICON] ANYMAILFINDER_API_KEY not configured. Email discovery degraded.");
+  }
+  return key;
+};
+
 async function callWithRetry<T>(fn: () => Promise<T>, retries = 5, delay = 15000): Promise<T> {
   try {
     return await fn();
@@ -53,6 +77,161 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 5, delay = 15000
   }
 }
 
+/**
+ * ANYMAILFINDER: Discover professional email addresses
+ * Inputs: name, company, domain
+ * Output: email, deliverability score, confidence level
+ */
+export const findEmailViaAnymailfinder = async (firstName: string, lastName: string, companyName?: string, domain?: string) => {
+  const apiKey = getAnymailfinderKey();
+  if (!apiKey) {
+    return { success: false, email: null, reason: "ANYMAILFINDER_API_KEY not configured" };
+  }
+
+  return callWithRetry(async () => {
+    const queryParams = new URLSearchParams();
+    queryParams.append('first_name', firstName);
+    queryParams.append('last_name', lastName);
+    if (companyName) queryParams.append('company_name', companyName);
+    if (domain) queryParams.append('domain', domain);
+
+    const response = await fetch(`https://api.anymailfinder.com/v5/findEmail?${queryParams.toString()}`, {
+      method: 'GET',
+      headers: {
+        'X-API-Key': apiKey,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Anymailfinder API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return {
+      success: data.success,
+      email: data.email,
+      confidence: data.confidence,
+      deliverability: data.deliverability,
+      sources: data.sources,
+      reason: data.reason
+    };
+  });
+};
+
+/**
+ * ANYMAILFINDER: Verify email address validity
+ * Used before sending outreach to confirm active email
+ */
+export const verifyEmailViaAnymailfinder = async (email: string) => {
+  const apiKey = getAnymailfinderKey();
+  if (!apiKey) {
+    return { valid: null, reason: "ANYMAILFINDER_API_KEY not configured" };
+  }
+
+  return callWithRetry(async () => {
+    const response = await fetch(`https://api.anymailfinder.com/v5/verifyEmail`, {
+      method: 'POST',
+      headers: {
+        'X-API-Key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Anymailfinder verification error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      valid: data.valid,
+      smtp_status: data.smtp_status,
+      confidence: data.confidence,
+      reason: data.reason
+    };
+  });
+};
+
+/**
+ * AIRSCALE: Property Intelligence & Ownership Data
+ * Returns: ownership history, property tax info, market valuation, lien records
+ */
+export const getPropertyIntelligenceViaAirscale = async (address: string, state: string) => {
+  const apiKey = getAirscaleKey();
+  if (!apiKey) {
+    return { success: false, reason: "AIRSCALE_API_KEY not configured" };
+  }
+
+  return callWithRetry(async () => {
+    const response = await fetch('https://api.airscale.io/v1/properties/search', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        address,
+        state,
+        include_ownership: true,
+        include_tax: true,
+        include_valuation: true,
+        include_liens: true
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Airscale API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      success: true,
+      property: data.property,
+      ownership: data.ownership,
+      tax_info: data.tax_info,
+      valuation: data.valuation,
+      liens: data.liens,
+      market_comparables: data.market_comparables
+    };
+  });
+};
+
+/**
+ * AIRSCALE: Owner Contact Information
+ * Leverages property data to locate current owner contact details
+ */
+export const getOwnerContactViaAirscale = async (propertyId: string) => {
+  const apiKey = getAirscaleKey();
+  if (!apiKey) {
+    return { success: false, reason: "AIRSCALE_API_KEY not configured" };
+  }
+
+  return callWithRetry(async () => {
+    const response = await fetch(`https://api.airscale.io/v1/properties/${propertyId}/owner-contact`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Airscale owner contact error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return {
+      success: true,
+      owner_name: data.owner_name,
+      owner_emails: data.owner_emails,
+      owner_phones: data.owner_phones,
+      mailing_address: data.mailing_address,
+      confidence_score: data.confidence_score
+    };
+  });
+};
+
 export const generateCorrespondence = async (
   lead: Lead, 
   mode: 'EMAIL' | 'SMS' | 'PHONE' | 'LETTER', 
@@ -60,6 +239,36 @@ export const generateCorrespondence = async (
 ) => {
   return callWithRetry(async () => {
     const ai = getAI();
+    
+    // LAYER 1: If mode is EMAIL and we don't have a verified email, attempt Anymailfinder discovery
+    let emailVerified = false;
+    let discoveredEmail = lead.email;
+    
+    if (mode === 'EMAIL' && !lead.email) {
+      const emailSearchResult = await findEmailViaAnymailfinder(
+        lead.ownerName.split(' ')[0],
+        lead.ownerName.split(' ').slice(1).join(' ')
+      );
+      if (emailSearchResult.success && emailSearchResult.email) {
+        discoveredEmail = emailSearchResult.email;
+        console.log(`[LEXICON] Email discovered via Anymailfinder: ${discoveredEmail} (confidence: ${emailSearchResult.confidence})`);
+      }
+    } else if (mode === 'EMAIL' && lead.email) {
+      // Verify existing email
+      const verifyResult = await verifyEmailViaAnymailfinder(lead.email);
+      emailVerified = verifyResult.valid === true;
+      if (!emailVerified) {
+        console.warn(`[LEXICON] Email verification failed for ${lead.email}. Attempting to find alternative.`);
+        const altSearch = await findEmailViaAnymailfinder(
+          lead.ownerName.split(' ')[0],
+          lead.ownerName.split(' ').slice(1).join(' ')
+        );
+        if (altSearch.success && altSearch.email) {
+          discoveredEmail = altSearch.email;
+        }
+      }
+    }
+
     const prompt = `
       ${LEXICON_CONSTITUTION}
       MISSION: Autonomous Outreach Execution for ${lead.ownerName}.
@@ -67,6 +276,8 @@ export const generateCorrespondence = async (
       CHANNEL: ${mode}
       SITUATION: ${context}
       SENDER: ${USER_IDENTITY.name}, ${USER_IDENTITY.ceoTitle} of ${USER_IDENTITY.company}.
+      EMAIL_VERIFIED: ${emailVerified}
+      TARGET_EMAIL: ${discoveredEmail || 'UNKNOWN'}
       
       RULES:
       1. TONE: Authoritative but empathetic.
@@ -121,6 +332,17 @@ export const getTacticalAdvice = async (lead: Lead, question: string) => {
 
 export const getPropertyInsights = async (address: string, lat?: number, lng?: number) => {
   return callWithRetry(async () => {
+    // LAYER 1: Attempt Airscale property intelligence (deterministic data)
+    let airscaleData = null;
+    const state = address.match(/[A-Z]{2}\s*\d{5}/) ? address.split(',').pop()?.trim() : 'Unknown';
+    
+    try {
+      airscaleData = await getPropertyIntelligenceViaAirscale(address, state);
+    } catch (e) {
+      console.warn("[LEXICON] Airscale lookup failed, proceeding with Gemini + Google Maps");
+    }
+
+    // LAYER 2: Gemini + Google Maps for AI-driven insights
     const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
@@ -130,7 +352,12 @@ export const getPropertyInsights = async (address: string, lat?: number, lng?: n
         toolConfig: { retrievalConfig: { latLng: lat && lng ? { latitude: lat, longitude: lng } : undefined } }
       },
     });
-    return { text: response.text || '', sources: [] };
+    
+    return { 
+      text: response.text || '', 
+      sources: [],
+      airscaleData: airscaleData?.success ? airscaleData : null
+    };
   });
 };
 
@@ -265,7 +492,103 @@ export const refineCorrespondence = async (lead: Lead, currentDraft: string, fee
   });
 };
 
-export const optimizeSkipTracingStrategy = (p: any, l: Lead) => generateMasterStrategy(l);
-export const generateOutreachPlan = (l: Lead) => generateMasterStrategy(l);
+export const optimizeSkipTracingStrategy = async (lead: Lead) => {
+  return callWithRetry(async () => {
+    // SHADOW-TRACE: Multi-layer skip tracing using Anymailfinder + Airscale + Gemini
+    
+    const results: any = {
+      lead: lead.ownerName,
+      timestamp: new Date().toISOString(),
+      layers: []
+    };
+
+    // LAYER 1: AIRSCALE - Get owner contact from property
+    if (lead.propertyAddress && lead.state) {
+      try {
+        const propertyIntel = await getPropertyIntelligenceViaAirscale(
+          lead.propertyAddress,
+          lead.state
+        );
+        if (propertyIntel.success && propertyIntel.property?.id) {
+          const ownerContact = await getOwnerContactViaAirscale(propertyIntel.property.id);
+          results.layers.push({
+            name: 'AIRSCALE_PROPERTY_OWNER',
+            success: ownerContact.success,
+            data: ownerContact
+          });
+        }
+      } catch (e) {
+        console.warn("[LEXICON] Airscale skip-trace layer failed");
+      }
+    }
+
+    // LAYER 2: ANYMAILFINDER - Email discovery
+    if (lead.ownerName) {
+      try {
+        const nameParts = lead.ownerName.split(' ');
+        const emailResult = await findEmailViaAnymailfinder(
+          nameParts[0],
+          nameParts.slice(1).join(' ')
+        );
+        results.layers.push({
+          name: 'ANYMAILFINDER_EMAIL_DISCOVERY',
+          success: emailResult.success,
+          data: {
+            email: emailResult.email,
+            confidence: emailResult.confidence,
+            deliverability: emailResult.deliverability,
+            sources: emailResult.sources
+          }
+        });
+      } catch (e) {
+        console.warn("[LEXICON] Anymailfinder email discovery failed");
+      }
+    }
+
+    // LAYER 3: GEMINI DEEP-THINKING - Synthesize all intel and generate strategy
+    const ai = getAI();
+    const synthesisPrompt = `
+      ${LEXICON_CONSTITUTION}
+      TASK: SHADOW-TRACE synthesis for Tom.
+      
+      TARGET: ${lead.ownerName}
+      AMOUNT: $${lead.amount}
+      PROPERTY: ${lead.propertyAddress}
+      
+      MULTI-LAYER INTEL COLLECTED:
+      ${JSON.stringify(results.layers, null, 2)}
+      
+      COMMAND: Synthesize all signals. Provide:
+      1. Highest-confidence contact method
+      2. Recommended outreach sequence
+      3. Risk factors for this lead
+      4. Suggested next action for Tom
+      
+      Use deep reasoning to connect signals and identify the optimal path forward.
+    `;
+
+    const strategicResponse = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: synthesisPrompt,
+      config: { 
+        thinkingConfig: { thinkingBudget: 32768 },
+        temperature: 0.5 
+      }
+    });
+
+    return {
+      ...results,
+      strategy: strategicResponse.text,
+      agent: 'SHADOW-TRACE'
+    };
+  });
+};
+
+export const generateOutreachPlan = async (lead: Lead) => {
+  // Leverage skip-tracing strategy with email verification
+  const tracingResult = await optimizeSkipTracingStrategy(lead);
+  return tracingResult.strategy;
+};
+
 export const generateClosingStrategy = (l: Lead) => generateMasterStrategy(l);
 export const generateFilingChecklist = (l: Lead) => generateMasterStrategy(l);

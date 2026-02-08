@@ -5,7 +5,7 @@ export type LeadStatus = 'DISCOVERED' | 'TRACED' | 'CONTACTED' | 'LEGAL_REVIEW' 
 
 export type VerificationStatus = 'YES' | 'NO' | 'PENDING';
 
-export type ViewType = 'OPERATIONS' | 'INTELLIGENCE' | 'AUDIT' | 'TACTICAL_MAP';
+export type ViewType = 'OPERATIONS' | 'INTELLIGENCE' | 'AUDIT' | 'TACTICAL_MAP' | 'MASTER_CONTROL';
 
 export interface UserIdentity {
   name: string;
@@ -14,6 +14,76 @@ export interface UserIdentity {
   company: string;
   ceoTitle: string;
   senderEmail: string;
+}
+
+/**
+ * ANYMAILFINDER API TYPES
+ */
+export interface AnymailfinderEmailResult {
+  success: boolean;
+  email?: string;
+  confidence?: number;
+  deliverability?: string;
+  sources?: string[];
+  reason?: string;
+}
+
+export interface AnymailfinderVerifyResult {
+  valid: boolean | null;
+  smtp_status?: string;
+  confidence?: number;
+  reason?: string;
+}
+
+/**
+ * AIRSCALE API TYPES
+ */
+export interface AirscalePropertyData {
+  success: boolean;
+  property?: {
+    id: string;
+    address: string;
+    state: string;
+    county: string;
+    latitude: number;
+    longitude: number;
+  };
+  ownership?: {
+    owner_name: string;
+    ownership_type: string;
+    ownership_percentage: number;
+  };
+  tax_info?: {
+    assessed_value: number;
+    annual_tax: number;
+    tax_year: number;
+  };
+  valuation?: {
+    estimated_value: number;
+    valuation_date: string;
+    confidence_score: number;
+  };
+  liens?: Array<{
+    lien_type: string;
+    lien_amount: number;
+    lien_date: string;
+  }>;
+  market_comparables?: Array<{
+    address: string;
+    sale_price: number;
+    sale_date: string;
+  }>;
+  reason?: string;
+}
+
+export interface AirscaleOwnerContact {
+  success: boolean;
+  owner_name?: string;
+  owner_emails?: string[];
+  owner_phones?: string[];
+  mailing_address?: string;
+  confidence_score?: number;
+  reason?: string;
 }
 
 export interface Agent {

@@ -9,6 +9,10 @@ import IntelligenceHub from './components/IntelligenceHub';
 import LeadDossier from './components/LeadDossier';
 import LiveAudioController from './components/LiveAudioController';
 import TacticalMap from './components/TacticalMap';
+import WhaleHunt from './components/WhaleHunt';
+import MasterControl from './components/MasterControl';
+import ResizablePanel from './components/ResizablePanel';
+import LayoutManager from './components/LayoutManager';
 import { 
   scoutSurplusFunds, 
   analyzeLead, 
@@ -79,12 +83,21 @@ const App: React.FC = () => {
   const [closingResult, setClosingResult] = useState<string | null>(null);
   const [filerResult, setFilerResult] = useState<string | null>(null);
   const [reconResult, setReconResult] = useState<string | null>(null);
+  
+  const [showWhaleHunt, setShowWhaleHunt] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<'default' | 'split' | 'compact'>('default');
+  const [windowLayout, setWindowLayout] = useState<{ [key: string]: { x: number; y: number; width: number | string; height: number | string } }>({});
 
   useEffect(() => { localStorage.setItem('sr_leads', JSON.stringify(leads)); }, [leads]);
   useEffect(() => { localStorage.setItem('sr_auth', isAuthenticated.toString()); }, [isAuthenticated]);
   useEffect(() => { localStorage.setItem('sr_location', JSON.stringify(locationHint)); }, [locationHint]);
   useEffect(() => { localStorage.setItem('sr_autostart', autoStartOnLoad.toString()); }, [autoStartOnLoad]);
   useEffect(() => { localStorage.setItem('sr_quota', discoveryQuota.toString()); }, [discoveryQuota]);
+  useEffect(() => { localStorage.setItem('sr_layout_mode', layoutMode); }, [layoutMode]);
+  useEffect(() => {
+    const saved = localStorage.getItem('sr_layout_mode');
+    if (saved) setLayoutMode(saved as 'default' | 'split' | 'compact');
+  }, []);
 
   const selectedLead = useMemo(() => leads.find(l => l.id === selectedLeadId) || null, [leads, selectedLeadId]);
 
@@ -102,6 +115,30 @@ const App: React.FC = () => {
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updates } : l));
   };
 
+  const handleWhalesDiscovered = (whales: Lead[]) => {
+    setLeads(prev => [...prev, ...whales]);
+    addLog('SCOUTER', `🐋 Whale Hunt Complete: ${whales.length} whales integrated into swarm`, 'SUCCESS');
+    setShowWhaleHunt(false);
+  };
+
+  const handleWhaleHuntLog = (message: string, type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR') => {
+    const agentMap: Record<string, AgentRole> = {
+      'SCOUT-NET': 'SCOUTER',
+      'SHADOW-TRACE': 'TRACER',
+      'CORE-AI': 'STRATEGIST'
+    };
+    
+    let agent: AgentRole = 'SCOUTER';
+    for (const [key, value] of Object.entries(agentMap)) {
+      if (message.includes(key)) {
+        agent = value;
+        break;
+      }
+    }
+    
+    addLog(agent, message, type);
+  };
+
   const clearResults = () => {
     setThinkingResult(null);
     setOutreachResult(null);
@@ -109,6 +146,26 @@ const App: React.FC = () => {
     setMasterResult(null);
     setFilerResult(null);
     setReconResult(null);
+  };
+
+  const updateAgent = (agentId: AgentRole, updates: Partial<Agent>) => {
+    setAgents(prev => prev.map(a => a.id === agentId ? { ...a, ...updates } : a));
+  };
+
+  const handleLayoutChange = (layout: 'default' | 'split' | 'compact') => {
+    setLayoutMode(layout);
+    localStorage.setItem('sr_layout_mode', layout);
+  };
+
+  const handleResetLayout = () => {
+    // Clear all panel positions from localStorage
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if (key.startsWith('panel_')) {
+        localStorage.removeItem(key);
+      }
+    });
+    window.location.reload();
   };
 
   const handleSelectLead = (lead: Lead) => {
@@ -144,13 +201,13 @@ const App: React.FC = () => {
     // quota check
     if (leads.length >= discoveryQuota) {
       addLog('SCOUTER', `Resource Quota Exhausted (${discoveryQuota}/${discoveryQuota}). Discovery Halted.`, 'WARNING');
-      setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'IDLE' } : a));
+      updateAgent('SCOUTER', { status: 'IDLE', lastAction: 'Quota exhausted' });
       setIsAutoScouting(false);
       return;
     }
 
     if (isManual) setIsAutoScouting(false);
-    setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'WORKING' } : a));
+    updateAgent('SCOUTER', { status: 'WORKING', lastAction: `Scanning ${searchMode === 'GEOGRAPHIC' ? `${locationHint.county}, ${locationHint.state}` : customQuery}` });
     
     try {
       const targetStr = searchMode === 'GEOGRAPHIC' 
@@ -177,11 +234,10 @@ const App: React.FC = () => {
 
       if (isDuplicate) {
         addLog('SCOUTER', `Duplicate found: ${leadData.ownerName}. Searching new block...`, 'WARNING');
+        updateAgent('SCOUTER', { status: 'IDLE', lastAction: 'Duplicate detected, searching new block' });
         // Recursively trigger next if still under quota and in auto-mode
         if (isAutoScouting) {
           setTimeout(() => runDiscovery(false), 30000); 
-        } else {
-          setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'IDLE' } : a));
         }
         return;
       }
@@ -213,6 +269,7 @@ const App: React.FC = () => {
 
       newLead.priorityScore = await calculatePriorityScore(newLead);
       setLeads(prev => [newLead, ...prev]);
+      updateAgent('SCOUTER', { status: 'SUCCESS', lastAction: `Discovered ${newLead.ownerName} - $${newLead.amount.toLocaleString()}` });
       addLog('SCOUTER', `Discovery Complete: $${newLead.amount.toLocaleString()}. Priority ${newLead.priorityScore}%`, 'SUCCESS', newLead.id);
       
       // Check quota again after addition
@@ -221,14 +278,14 @@ const App: React.FC = () => {
       } else {
         if (isAutoScouting) {
            addLog('STRATEGIST', `Quota Met (${discoveryQuota}). Deactivating auto-swarm.`, 'SUCCESS');
+           updateAgent('SCOUTER', { status: 'IDLE', lastAction: 'Quota met, discovery complete' });
         }
         setIsAutoScouting(false);
-        setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'SUCCESS' } : a));
       }
     } catch (e: any) {
       const errorMsg = typeof e === 'string' ? e : e.message || JSON.stringify(e);
       addLog('SCOUTER', `Execution Error: ${errorMsg}. Self-annealing triggered.`, 'ERROR');
-      setAgents(prev => prev.map(a => a.id === 'SCOUTER' ? { ...a, status: 'ERROR' } : a));
+      updateAgent('SCOUTER', { status: 'ERROR', lastAction: `Error: ${errorMsg}` });
       setIsAutoScouting(false);
     }
   };
@@ -254,73 +311,79 @@ const App: React.FC = () => {
 
   const runMasterStrategy = async (lead: Lead) => {
     setIsDeepThinking(true);
-    setAgents(prev => prev.map(a => a.id === 'STRATEGIST' ? { ...a, status: 'WORKING' } : a));
+    updateAgent('STRATEGIST', { status: 'WORKING', lastAction: `Analyzing ${lead.ownerName}` });
     try {
       const res = await generateMasterStrategy(lead);
       setMasterResult(res);
+      updateAgent('STRATEGIST', { status: 'SUCCESS', lastAction: `Blueprint ready for ${lead.ownerName}` });
       addLog('STRATEGIST', `Generated Master Blueprint for Tom regarding ${lead.ownerName}`, 'SUCCESS', lead.id);
-      setAgents(prev => prev.map(a => a.id === 'STRATEGIST' ? { ...a, status: 'SUCCESS' } : a));
-    } catch (err) { setAgents(prev => prev.map(a => a.id === 'STRATEGIST' ? { ...a, status: 'ERROR' } : a));
+    } catch (err) { 
+      updateAgent('STRATEGIST', { status: 'ERROR', lastAction: `Failed to analyze ${lead.ownerName}` });
     } finally { setIsDeepThinking(false); }
   };
 
   const runDeepTrace = async (lead: Lead) => {
     setIsDeepThinking(true);
-    setAgents(prev => prev.map(a => a.id === 'TRACER' ? { ...a, status: 'WORKING' } : a));
+    updateAgent('TRACER', { status: 'WORKING', lastAction: `Skip-tracing ${lead.ownerName}` });
     try {
-      const res = await optimizeSkipTracingStrategy([], lead);
+      const res = await optimizeSkipTracingStrategy(lead);
       setThinkingResult(res);
+      updateAgent('TRACER', { status: 'SUCCESS', lastAction: `Traced ${lead.ownerName}` });
       addLog('TRACER', `Deep Trace successful for ${lead.ownerName}`, 'SUCCESS', lead.id);
-      setAgents(prev => prev.map(a => a.id === 'TRACER' ? { ...a, status: 'SUCCESS' } : a));
-    } catch (err) { setAgents(prev => prev.map(a => a.id === 'TRACER' ? { ...a, status: 'ERROR' } : a));
+    } catch (err) { 
+      updateAgent('TRACER', { status: 'ERROR', lastAction: `Trace failed for ${lead.ownerName}` });
     } finally { setIsDeepThinking(false); }
   };
 
   const runOutreachGeneration = async (lead: Lead) => {
     setIsDeepThinking(true);
-    setAgents(prev => prev.map(a => a.id['CORRESPONDENT'] ? { ...a, status: 'WORKING' } : a));
+    updateAgent('CORRESPONDENT', { status: 'WORKING', lastAction: `Drafting outreach for ${lead.ownerName}` });
     try {
       const res = await generateOutreachPlan(lead);
       setOutreachResult(res);
+      updateAgent('CORRESPONDENT', { status: 'SUCCESS', lastAction: `Outreach ready for ${lead.ownerName}` });
       addLog('CORRESPONDENT', `Outreach directive synthesized for ${lead.ownerName}`, 'SUCCESS', lead.id);
-      setAgents(prev => prev.map(a => a.id === 'CORRESPONDENT' ? { ...a, status: 'SUCCESS' } : a));
-    } catch (err) { setAgents(prev => prev.map(a => a.id === 'CORRESPONDENT' ? { ...a, status: 'ERROR' } : a));
+    } catch (err) { 
+      updateAgent('CORRESPONDENT', { status: 'ERROR', lastAction: `Outreach failed for ${lead.ownerName}` });
     } finally { setIsDeepThinking(false); }
   };
 
   const runClosingStrategy = async (lead: Lead) => {
     setIsDeepThinking(true);
-    setAgents(prev => prev.map(a => a.id === 'LEGAL' ? { ...a, status: 'WORKING' } : a));
+    updateAgent('LEGAL', { status: 'WORKING', lastAction: `Preparing legal strategy for ${lead.ownerName}` });
     try {
       const res = await generateClosingStrategy(lead);
       setClosingResult(res);
+      updateAgent('LEGAL', { status: 'SUCCESS', lastAction: `Legal strategy ready for ${lead.ownerName}` });
       addLog('LEGAL', `Legal Filing Strategy ready for Tom's review.`, 'SUCCESS', lead.id);
-      setAgents(prev => prev.map(a => a.id === 'LEGAL' ? { ...a, status: 'SUCCESS' } : a));
-    } catch (err) { setAgents(prev => prev.map(a => a.id === 'LEGAL' ? { ...a, status: 'ERROR' } : a));
+    } catch (err) { 
+      updateAgent('LEGAL', { status: 'ERROR', lastAction: `Legal planning failed for ${lead.ownerName}` });
     } finally { setIsDeepThinking(false); }
   };
 
   const runFilingChecklist = async (lead: Lead) => {
     setIsDeepThinking(true);
-    setAgents(prev => prev.map(a => a.id === 'FILER' ? { ...a, status: 'WORKING' } : a));
+    updateAgent('FILER', { status: 'WORKING', lastAction: `Preparing filing checklist for ${lead.ownerName}` });
     try {
       const res = await generateFilingChecklist(lead);
       setFilerResult(res);
+      updateAgent('FILER', { status: 'SUCCESS', lastAction: `Filing checklist ready for ${lead.ownerName}` });
       addLog('FILER', `Deterministic Checklist generated for ${lead.ownerName}`, 'SUCCESS', lead.id);
-      setAgents(prev => prev.map(a => a.id === 'FILER' ? { ...a, status: 'SUCCESS' } : a));
-    } catch (err) { setAgents(prev => prev.map(a => a.id === 'FILER' ? { ...a, status: 'ERROR' } : a));
+    } catch (err) { 
+      updateAgent('FILER', { status: 'ERROR', lastAction: `Filing checklist failed for ${lead.ownerName}` });
     } finally { setIsDeepThinking(false); }
   };
 
   const runRecon = async (lead: Lead) => {
     setIsDeepThinking(true);
-    setAgents(prev => prev.map(a => a.id === 'SURVEYOR' ? { ...a, status: 'WORKING' } : a));
+    updateAgent('SURVEYOR', { status: 'WORKING', lastAction: `Scanning property for ${lead.ownerName}` });
     try {
       const res = await getPropertyInsights(lead.propertyAddress || lead.lastKnownAddress, lead.latLng?.lat, lead.latLng?.lng);
       setReconResult(res.text);
+      updateAgent('SURVEYOR', { status: 'SUCCESS', lastAction: `Recon complete for ${lead.ownerName}` });
       addLog('SURVEYOR', `Geographic Recon successful for ${lead.ownerName}`, 'SUCCESS', lead.id);
-      setAgents(prev => prev.map(a => a.id === 'SURVEYOR' ? { ...a, status: 'SUCCESS' } : a));
-    } catch (err) { setAgents(prev => prev.map(a => a.id === 'SURVEYOR' ? { ...a, status: 'ERROR' } : a));
+    } catch (err) { 
+      updateAgent('SURVEYOR', { status: 'ERROR', lastAction: `Recon failed for ${lead.ownerName}` });
     } finally { setIsDeepThinking(false); }
   };
 
@@ -389,6 +452,9 @@ const App: React.FC = () => {
             </button>
             <button onClick={() => setView('AUDIT')} className={`w-full text-left px-5 py-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-4 ${view === 'AUDIT' ? 'bg-white/5 text-indigo-400' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
               System Audit Stream
+            </button>
+            <button onClick={() => setView('MASTER_CONTROL')} className={`w-full text-left px-5 py-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-4 ${view === 'MASTER_CONTROL' ? 'bg-white/5 text-purple-400' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
+              👁️ All-Seeing Eye
             </button>
           </nav>
         </div>
@@ -505,10 +571,22 @@ const App: React.FC = () => {
                    </div>
                 </div>
               </div>
-              <button onClick={() => runDiscovery(true)} className="bg-white text-black px-8 py-4 rounded-xl text-[12px] font-black uppercase tracking-widest transition-all hover:bg-zinc-200 shadow-2xl shadow-white/5 active:scale-95">Manual Execution</button>
+              <div className="flex items-center gap-4">
+                <button onClick={() => runDiscovery(true)} className="bg-white text-black px-8 py-4 rounded-xl text-[12px] font-black uppercase tracking-widest transition-all hover:bg-zinc-200 shadow-2xl shadow-white/5 active:scale-95">Manual Execution</button>
+                <button onClick={() => setShowWhaleHunt(true)} className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-8 py-4 rounded-xl text-[12px] font-black uppercase tracking-widest transition-all hover:from-purple-700 hover:to-indigo-700 shadow-2xl shadow-purple-500/30 active:scale-95">🐋 Whale Hunt</button>
+              </div>
             </div>
           </div>
         </header>
+
+        {/* Layout Manager Bar */}
+        <div className="h-10 bg-zinc-950/50 border-b border-zinc-800 px-8 flex items-center justify-between">
+          <LayoutManager 
+            currentLayout={layoutMode}
+            onLayoutChange={handleLayoutChange}
+            onResetLayout={handleResetLayout}
+          />
+        </div>
 
         <div className="flex-1 overflow-hidden relative">
            {view === 'OPERATIONS' ? (
@@ -517,18 +595,54 @@ const App: React.FC = () => {
              <TacticalMap leads={leads} onSelectLead={handleSelectLead} />
            ) : view === 'AUDIT' ? (
              <div className="p-10 h-full"><Terminal logs={logs} /></div>
+           ) : view === 'MASTER_CONTROL' ? (
+             <MasterControl 
+               agents={agents}
+               leads={leads}
+               logs={logs}
+               isAutoScouting={isAutoScouting}
+               onStopAll={() => setIsAutoScouting(false)}
+             />
            ) : (
              <IntelligenceHub selectedLead={selectedLead} leads={leads} />
            )}
         </div>
-
-        <div className={`fixed bottom-12 z-[60] w-[420px] transition-all duration-700 ease-in-out ${selectedLead ? 'right-[660px]' : 'right-12'}`}>
-           <ChatBot />
-        </div>
+        {/* Draggable ChatBot Panel */}
+        {selectedLead && (
+          <ResizablePanel
+            id="chatbot-panel"
+            title="Strategic Advisor"
+            defaultWidth={420}
+            defaultHeight={500}
+            defaultX={window.innerWidth - 500}
+            defaultY={window.innerHeight - 550}
+            minWidth={300}
+            minHeight={200}
+            isDraggable={layoutMode !== 'default'}
+            isResizable={layoutMode !== 'default'}
+            zIndex={60}
+          >
+            <ChatBot />
+          </ResizablePanel>
+        )}
       </main>
 
-      <div className={`dossier-panel fixed top-0 right-0 h-full w-[640px] bg-[#0c0c0e] border-l border-zinc z-50 flex flex-col shadow-[-60px_0_120px_rgba(0,0,0,0.9)] ${selectedLead ? 'translate-x-0' : 'translate-x-full'}`}>
-        {selectedLead && (
+      {/* Draggable Lead Dossier Panel */}
+      {selectedLead && (
+        <ResizablePanel
+          id="dossier-panel"
+          title={`${selectedLead.ownerName} - Dossier`}
+          defaultWidth={640}
+          defaultHeight={800}
+          defaultX={window.innerWidth - 700}
+          defaultY={120}
+          minWidth={400}
+          minHeight={300}
+          isDraggable={layoutMode !== 'default'}
+          isResizable={layoutMode !== 'default'}
+          zIndex={50}
+          onClose={() => { setSelectedLeadId(null); clearResults(); }}
+        >
           <LeadDossier 
             lead={selectedLead}
             onClose={() => { setSelectedLeadId(null); clearResults(); }}
@@ -548,10 +662,35 @@ const App: React.FC = () => {
             isDeepThinking={isDeepThinking}
             updateLead={updateLead}
           />
-        )}
-      </div>
+        </ResizablePanel>
+      )}
+
+      {/* WHALE HUNT MODAL */}
+      {showWhaleHunt && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 flex items-center justify-center p-8">
+          <div className="w-full max-w-2xl bg-[#0c0c0e] border border-purple-500/30 rounded-2xl shadow-2xl shadow-purple-500/20 max-h-[90vh] overflow-y-auto custom-scroll">
+            <div className="sticky top-0 bg-[#0c0c0e] border-b border-purple-500/20 p-6 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white">🐋 WHALE HUNT EXECUTOR</h2>
+              <button 
+                onClick={() => setShowWhaleHunt(false)}
+                className="text-zinc-400 hover:text-white transition-colors text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <WhaleHunt 
+                onWhalesDiscovered={handleWhalesDiscovered}
+                onLog={handleWhaleHuntLog}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
 
 export default App;

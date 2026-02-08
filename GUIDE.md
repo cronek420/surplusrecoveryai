@@ -19,9 +19,9 @@ At the heart of the platform is the **Swarm Orchestrator**. Unlike traditional C
 Each agent is powered by **Gemini 3 Pro** with deep-thinking configurations to handle complex reasoning:
 
 - **🕵️ Scout-Net (Discovery):** Uses Google Search Grounding to scan public dockets and foreclosure portals. It filters for high-value targets (>$40k) and extracts raw public records.
-- **👤 Shadow-Trace (Skip-Tracing):** The intelligence specialist. It uses high-budget thinking tokens to perform deep skip-tracing, correlate identity signals across the web, and locate heirs or displaced owners.
-- **📣 Echo-Sync (Outreach):** A multi-channel communication engine. It drafts 3-touch sequences (Email, SMS, Phone) specifically tailored to the lead’s psychological profile and the urgency of the funds.
-- **⚖️ Lex-Analyst (Legal Architecture):** The jurisdictional brain. It vets state statutes, identifies heirship standing, and prepares the "White-Glove" document package required for court filing.
+- **👤 Shadow-Trace (Skip-Tracing):** The intelligence specialist. It uses high-budget thinking tokens to perform deep skip-tracing, correlate identity signals across the web, and locate heirs or displaced owners. **Enhanced with Anymailfinder & Airscale** for professional email discovery and property ownership intelligence.
+- **📣 Echo-Sync (Outreach):** A multi-channel communication engine. It drafts 3-touch sequences (Email, SMS, Phone) specifically tailored to the lead's psychological profile and the urgency of the funds. **Uses Anymailfinder** for email verification and deliverability confirmation.
+- **⚖️ Lex-Analyst (Legal Architecture):** The jurisdictional brain. It vets state statutes, identifies heirship standing, and prepares the "White-Glove" document package required for court filing. **Leverages Airscale** for lien records and ownership verification.
 - **✅ Veri-File (The Last Mile):** The disbursement watchdog. It monitors the court docket for "Green Light" events (Order Granting Disbursement) and ensures the clerk cuts the check to the correct address.
 
 ---
@@ -54,3 +54,50 @@ Traditional recovery firms take weeks to skip-trace and file a claim. **SR-AI do
 3. **Outreach:** Done instantly via Echo-Sync.
 
 The user moves from being a "researcher" to being a **Swarm Commander**, overseeing a fleet of agents that work 24/7 to recover capital that would otherwise be escheated to the state.
+
+---
+
+## 5. Third-Party Intelligence Integrations
+
+### Anymailfinder - Professional Email Discovery & Verification
+**Purpose:** Locates professional email addresses and verifies deliverability before outreach.
+
+**Integration Points:**
+- **Shadow-Trace (Skip-Tracing):** Discovers professional emails from first name + last name + company
+- **Echo-Sync (Outreach):** Verifies email validity before sending campaigns (SMTP validation)
+- **Automated Fallback:** If primary email is invalid, system automatically discovers alternatives
+
+**Benefits:**
+- Increases outreach success rates by validating emails before sending
+- Reduces bounce rates and reputation damage
+- Confidence scoring shows reliability of each email address
+
+### Airscale - Property Intelligence & Real Estate Data
+**Purpose:** Comprehensive property ownership, valuation, and lien record retrieval.
+
+**Integration Points:**
+- **Shadow-Trace (Skip-Tracing):** Retrieves owner contact information directly from property records
+- **Lex-Analyst (Legal Architecture):** Accesses lien records and ownership history for legal review
+- **Surv-01 (Property Recon):** Supplements Google Maps data with professional tax assessments and valuations
+
+**Data Retrieved:**
+- Ownership history and current owner details
+- Property tax assessment information
+- Market valuation estimates
+- Lien and encumbrance records
+- Owner contact information (mailing address, phone)
+- Market comparables for property valuation
+
+**Benefits:**
+- Instant owner contact retrieval reduces skip-tracing time from days to seconds
+- Lien data feeds directly into legal review workflow
+- Ownership verification reduces compliance risk
+
+### Configuration
+Both services require API keys in the `.env` file:
+```
+ANYMAILFINDER_API_KEY=your_key_here
+AIRSCALE_API_KEY=your_key_here
+```
+
+See `.env.example` for complete setup instructions.
